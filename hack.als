@@ -214,10 +214,10 @@ fact "all methods in abstract classes that use static must have the LSB Attribut
     all m: Method | (containing_class[m] in AbstractClass and StaticKeyword in m.calls.receiver) implies m.is_lsb
 }
 
-// TODO:
-fact "all methods in abstract classes that call an LSB method must have the LSB Attribute" {
-   all m: Method | containing_class[m] in AbstractClass implies static_resolve[m.calls].is_lsb
-}
+// TODO: restore this
+//fact "all methods in abstract classes that call an LSB method must have the LSB Attribute" {
+//   all m: Method | containing_class[m] in AbstractClass implies static_resolve[m.calls].is_lsb
+//}
 
 fact "cannot call LSB methods through variables of type AbstractType" {
   all call: Call | static_resolve[call].is_lsb and call.receiver in Var implies call.receiver.var_ty in ConcreteType
@@ -261,17 +261,17 @@ fun static_resolve[call: Call]: Method {
 
 fun containing_class[m: Method]: Class {
   {
-     class: Class | m in class.methods and no child: Class |
-     class in child.^parent
+     class: Class | m in class.methods and
+     no ancestor: class.^parent | m in ancestor.methods
   }
 }
 
 fun containing_class[call: Call]: Class {
-  {class: Class | call in class.methods.calls and no child: Class | class in child.^parent }
+   call.containing_method.containing_class
 }
 
 fun containing_method[call: Call]: Method {
-   {m: containing_class[call].methods | m.method_name = call.call_method_name }
+   {m: Method | m.method_name = call.call_method_name}
 }
 
 pred inherits_from[descendent: Type, ancestor: Type] {
@@ -317,8 +317,8 @@ pred has_override {
 pred show { 
   // at least 1 method is abstract
   some am: AbstractMethod | am in univ
-  // TODO: comment this out
-  some call: Call | call.receiver = StaticKeyword
+  // TODO: comment the rest out. Interesting that this makes no instance found
+  some call: Call | call.receiver = StaticKeyword and containing_class[call] in ConcreteClass
 }
 
 pred show_complicated {
@@ -327,7 +327,7 @@ pred show_complicated {
   has_override
 }
 
-run  show
+run  show for 3
 // run show_complicated for 4
 
 // -------------check
