@@ -96,7 +96,7 @@ fact "typing: aliasing rules" {
 	rule_abstract_covariant[n1, n2]
        or rule_concrete_covariant[n1, n2]
        or rule_concrete_to_abstract[n1, n2]
-//       or rule_abstract_to_concrete[n1, n2]
+       or rule_abstract_to_concrete[n1, n2]
   )
 }
 
@@ -118,7 +118,6 @@ pred rule_concrete_to_abstract[n1: ClassName, n2: ClassName] {
 
 pred rule_abstract_to_concrete[n1: ClassName, n2: ClassName] {
   n1 in AbstractName and n2 in ConcreteName
-  and n2 in n1.upcast  
   and descendent_of[n1, n2] and n2.names_class in ConcreteClass
 }
 
@@ -151,8 +150,8 @@ fun static_resolve[call: Call]: Method {
     {m: Method | m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods}
 }
 
-pred descendent_of[n1: ClassName, n2: ClassName] {
-   n2.names_class in (n1.names_class + n1.names_class.^parent)
+pred descendent_of[descendent: ClassName, ancestor: ClassName] {
+   ancestor.names_class in (descendent.names_class + descendent.names_class.^parent)
 }
 
 
