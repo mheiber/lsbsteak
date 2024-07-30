@@ -3,65 +3,39 @@ abstract sig Class {
    parent: lone Class
 }
 
-sig AbstractClass extends Class {}
-
-sig ConcreteClass extends Class {}
-{
-  no m: AbstractMethod | m in methods
-}
+sig AbstractClass, ConcreteClass extends Class {}
 
 sig MethodName {}
-
 
 abstract sig Method {
   method_name: one MethodName
 }
+
 sig ConcreteMethod extends Method {
   calls: set Call
 }
+
 sig AbstractMethod extends Method {}
 
 sig Call {
    receiver: Var,
    call_method_name: MethodName,
    resolves_to: Method
-} {
-   resolves_to = resolve[this]
 }
 
 abstract sig ClassName {
    upcast: set ClassName,
    names_class: Class
 }
-sig AbstractName extends ClassName {}
-sig ConcreteName extends ClassName {}
+sig AbstractName, ConcreteName extends ClassName {}
 
 sig Var {
    var_ty: ClassName,
-   var_val: Class,
    var_points_to: one (Var + Class)
 }
 
-// ---------------vars
-fact {
-   all v1: Var | all v2: Var |
-   v1.var_points_to = v2 implies v2.var_ty in v1.var_ty.upcast
-}
 
-fact "A variable that directly names a concrete class must be concrete" {
-   all v: Var | all class: Class |
-   (v.var_points_to = class and v.var_ty in ConcreteName) implies class in ConcreteClass
-}
-fact "A variable must have come (transitively) from naming a class" {
-  all v: Var | v.var_val in v.^var_points_to
-}
-fact "Variable aliasing reflects subtyping" {
-   // v1: supertype = (v2: subtype)
-  all to: Var | all from: Var | to in from.var_points_to implies to.var_ty in from.var_ty.upcast
-}
-
-
-// --------------- Boring rules for well-formed classes
+// --------------- Boring well-formedness conditions
 
 fact "no class is its own ancestor" {
    all c: Class | c not in c.^parent
@@ -73,14 +47,28 @@ fact "all methods are in classes, all calls are in methods, all `MethodName`s ar
   all mn: MethodName | some m: Method | m.method_name = mn
 }
 
+fact "concrete classes cannot have abstract methods" {
+  all class: ConcreteClass | no m: AbstractMethod | m in class.methods
+}
+
+fact "A variable must have come (transitively) from naming a class" {
+  all v: Var | one class: Class | class in v.^var_points_to
+}
+
 // fact "all calls are resolved" { all call: Call | one m: Method | resolve[call] = m}
 fact "method names are unique in a class" {
   all c: Class | all m1: Method | all m2: Method |
   m1 in c.methods and m1.method_name = m2.method_name implies m1 = m2 
 }
 
+// ---------------Runtime semantics
 
-// --------------- Pre-existing, obvious typing rules
+fact "dynamic method resolution" {
+  all call: Call| call.resolves_to = resolve[call]
+}
+ 
+
+// --------------- Pre-existing, obvious type-checking
 
 fact "typing: an abstract method cannot override a concrete method " {
     all m1: Method | all overridden: Method | all c: Class |
@@ -91,41 +79,40 @@ fact "typing: an abstract method cannot override a concrete method " {
     implies m1 in ConcreteMethod
 }
 
-fact "typing: method must be statically visible: in c.foo() (where c is a name for a class) foo must exist on that class" {
-   all call: Call | some m: Method | static_resolve[call] = m
+fact "typing: method must be statically visible. Example: in c.foo() (where c is a name for a class) foo must exist on that class" {
+   all call: Call | one m: Method | static_resolve[call] = m
 }
 
-// --------------- helpers
-pred descendent_of[n1: ClassName, n2: ClassName] {
-   n2.names_class in (n1.names_class + n1.names_class.^parent)
+fact "typing: variable aliasing reflects subtyping" {
+   // upper: supertype = (lower: subtype)
+  all upper: Var | all lower: Var | lower in upper.var_points_to implies upper.var_ty in lower.var_ty.upcast
 }
+
 
 // --------------- New typing rules
 fact "typing: aliasing rules" {
   all n1: ClassName | all n2: ClassName |
   n2 in n1.upcast implies (
-	rule_abstract_covariant[n1, n2] or
-       rule_concrete_covariant[n1, n2] or
-       rule_concrete_to_abstract[n1, n2] or
-       rule_abstract_to_concrete[n1, n2]
+	rule_abstract_covariant[n1, n2]
+       or rule_concrete_covariant[n1, n2]
+       or rule_concrete_to_abstract[n1, n2]
+//       or rule_abstract_to_concrete[n1, n2]
   )
 }
 
+
 pred rule_abstract_covariant[n1: ClassName, n2: ClassName] {
   n1 in AbstractName and n2 in AbstractName
-  and n2 in n1.upcast  
   and descendent_of[n1, n2]
 }
 
 pred rule_concrete_covariant[n1: ClassName, n2: ClassName] {
   n1 in ConcreteName and n2 in ConcreteName
-  and n2 in n1.upcast  
   and descendent_of[n1, n2]
 }
 
 pred rule_concrete_to_abstract[n1: ClassName, n2: ClassName] {
   n1 in ConcreteName and n2 in AbstractName
-  and n2 in n1.upcast  
   and descendent_of[n1, n2]
 }
 
@@ -135,46 +122,28 @@ pred rule_abstract_to_concrete[n1: ClassName, n2: ClassName] {
   and descendent_of[n1, n2] and n2.names_class in ConcreteClass
 }
 
-//fact "typing: AbstractName is covariant" {
-//  all n1: AbstractName |
-//  all n2: AbstractName |
-//  n2 in n1.upcast  implies descendent_of[n1, n2]
-//}
-//
-//
-//fact "typing: ConcreteName is covariant" {
-//  all n1: ConcreteName |
-//  all n2: ConcreteName |
-//  n2 in n1.upcast implies descendent_of[n1, n2]
-//}
-//
-//fact "typing: ConcreteName to AbstractName" {
-//  all n1: ConcreteName |
-//  all n2: AbstractName |
-//  n2 in n1.upcast  implies descendent_of[n1, n2]
-//}
-//
-//fact "typing: AbstractName to ConcreteName" { // TODO! reinstate this rule
-//  all n1: AbstractName |
-//  all n2: ConcreteName |
-//  n2 in n1.upcast implies descendent_of[n1, n2] and n2.names_class in ConcreteClass
-//}
-
-
-
 
 fact "typing: can't call abstract methods through AbstractName" {
   all call: Call |       all m: Method |
     (call.receiver.var_ty in AbstractName and
-            m.method_name = call.call_method_name and m in  static_resolve[call])
+            m.method_name = call.call_method_name and m in static_resolve[call])
             implies m in ConcreteMethod
 }
 
-// ------------- Helpers: method resolution
+fact "A variable that points directly to a class can only have type ConcreteName if the class is concrete" {
+   all v: Var | all class: Class |
+   (v.var_points_to = class and v.var_ty in ConcreteName) implies class in ConcreteClass
+}
+
+// ------------- helpers
+
+fun resolve_var[v: Var]: one Class {
+    {class: Class | class in v.^var_points_to} // guaranteed to be exactly one due to fact above
+}
 
 // c.foo() where c is a name for a class resolves to method foo of c *or a sub-class of c* at runtime
 fun resolve[call: Call]: Method {
-    {m: Method | m.method_name = call.call_method_name and m in call.receiver.var_val.methods}
+    {m: Method | m.method_name = call.call_method_name and m in call.receiver.resolve_var.methods}
 }
 
 // c.foo() where c is a name for a class "statically resolves" to method foo of c
@@ -182,27 +151,28 @@ fun static_resolve[call: Call]: Method {
     {m: Method | m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods}
 }
 
-//fact "make it interesting" {
-//  some n1: AbstractName |
-//  some n2: ConcreteName |
-//  some call: Call |
-//  n2 in n1.upcast and descendent_of[n1, n2]
-//  and call.receiver.var_ty in ConcreteName and call.receiver.var_val in AbstractClass
-//}
-
-
-// ------------- stuff
-
-fact "non-essential eta rule for AbstractName that makes visualizations easier to read" {
-   all an: AbstractName | all an2: AbstractName |
-   an2.names_class = an.names_class
-   and an2.upcast = an.upcast implies an = an2
+pred descendent_of[n1: ClassName, n2: ClassName] {
+   n2.names_class in (n1.names_class + n1.names_class.^parent)
 }
 
+
+// ------------- pretty
+
+fact "non-essential eta rule for ClassName that makes visualizations easier to read" {
+   all n1: ClassName | all n2: ClassName |
+   n1.names_class = n2.names_class
+   and n1.upcast = n2.upcast implies n2 = n1
+}
+
+// ------------ ensure safety is non-trivial
+fact "non-trivial" {
+    some am: AbstractMethod | am in univ
+    some call: Call | call in univ
+}
 // -------------run it
-//run show {some m: AbstractMethod | m in AbstractMethod and some call: Call | call in Call }
+//run  {}
 assert safe {  no c: Call | resolve[c] in AbstractMethod }
-check safe for 2
+check safe for 3 but 1 Call
 
 
 
