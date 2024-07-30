@@ -23,14 +23,14 @@ sig Call {
    resolves_to: Method
 }
 
-abstract sig ClassName {
-   upcast: set ClassName,
+abstract sig Type {
+   supertypes: set Type,
    names_class: Class
 }
-sig AbstractName, ConcreteName extends ClassName {}
+sig AbstractType, ConcreteType extends Type {}
 
 sig Var {
-   var_ty: ClassName,
+   var_ty: Type,
    var_points_to: one (Var + Class)
 }
 
@@ -92,75 +92,92 @@ fact "typing: method calls are well-typed. Example: in c.foo() (where c is a nam
 fact "typing: variable aliasing reflects subtyping" {
   // var lower: subtype = .....
   // var upper: supertype = lower
-  all upper: Var | all lower: Var | lower in upper.var_points_to implies upper.var_ty in lower.var_ty.upcast
+  all upper: Var | all lower: Var | lower in upper.var_points_to implies upper.var_ty in lower.var_ty.supertypes
 }
 
 
 // --------------- New typing rules
 fact "typing: aliasing rules" {
-  all n1: ClassName | all n2: ClassName |
+  all t1: Type | all t2: Type |
   // all rules share the same conclusion
-  n2 in n1.upcast implies (
-	rule_abstract_covariant[n1, n2]
-       or rule_concrete_covariant[n1, n2]
-       or rule_concrete_to_abstract[n1, n2]
-       or rule_abstract_to_concrete[n1, n2]
+  t2 in t1.supertypes implies (
+	rule_abstract_covariant[t1, t2]
+       or rule_concrete_covariant[t1, t2]
+       or rule_concrete_to_abstract[t1, t2]
+       or rule_abstract_to_concrete[t1, t2]
   )
 }
 
 /*
-T <: U
+T inherits from U
 ----------------------------------
-AbstractName<T> <: AbstractName<U>
+AbstractType<T> <: AbstractType<U>
 */
-pred rule_abstract_covariant[n1: ClassName, n2: ClassName] {
-  n1 in AbstractName and n2 in AbstractName
-  and descendent_of[n1, n2]
+pred rule_abstract_covariant[t1: Type, t2: Type] {
+  t1 in AbstractType and t2 in AbstractType
+  and inherits_from[t1, t2]
 }
 
 /*
-T <: U
+T inherits from U
 ----------------------------------
-ConcreteName<T> <: ConcreteName<U>
+ConcreteType<T> <: ConcreteType<U>
 */
-pred rule_concrete_covariant[n1: ClassName, n2: ClassName] {
-  n1 in ConcreteName and n2 in ConcreteName
-  and descendent_of[n1, n2]
+pred rule_concrete_covariant[t1: Type, t2: Type] {
+  t1 in ConcreteType and t2 in ConcreteType
+  and inherits_from[t1, t2]
 }
 
 /*
-T <: U
+T inherits from U
 ----------------------------------
-ConcreteName<T> <: AbstractName<U>
+ConcreteType<T> <: AbstractType<U>
 */
-pred rule_concrete_to_abstract[n1: ClassName, n2: ClassName] {
-  n1 in ConcreteName and n2 in AbstractName
-  and descendent_of[n1, n2]
+pred rule_concrete_to_abstract[t1: Type, t2: Type] {
+  t1 in ConcreteType and t2 in AbstractType
+  and inherits_from[t1, t2]
 }
 
 /*
-T <: U                       U is a concrete class
+T inherits from U                       U is a concrete class
 ----------------------------------
-AbstractName<T> <: ConcreteName<U>
+AbstractType<T> <: ConcreteType<U>
 */
-pred rule_abstract_to_concrete[n1: ClassName, n2: ClassName] {
-  n1 in AbstractName and n2 in ConcreteName
-  and descendent_of[n1, n2]
+pred rule_abstract_to_concrete[t1: Type, t2: Type] {
+  t1 in AbstractType and t2 in ConcreteType
+  and inherits_from[t1, t2]
   // the last conjunct is important. Comment it out to see a counterexample showing unsafety
-  and n2.names_class in ConcreteClass
+  and t2.names_class in ConcreteClass
 }
 
 
-fact "typing: can't call abstract methods through AbstractName" {
+fact "typing: can't call abstract methods through AbstractType" {
   all call: Call |       all m: Method |
-    (call.receiver.var_ty in AbstractName and
+    (call.receiver.var_ty in AbstractType and
             m.method_name = call.call_method_name and m in static_resolve[call])
             implies m in ConcreteMethod
 }
 
-fact "A variable that points directly to a class can only have type ConcreteName if the class is concrete" {
+/*
+
+C         C is a concrete class
+-------------------------
+C: ConcreteType<C>
+
+*/
+fact "C has type ConcreteType<C> when C is a concrete class" {
    all v: Var | all class: Class |
-   (v.var_points_to = class and v.var_ty in ConcreteName) implies class in ConcreteClass
+   (v.var_points_to = class and v.var_ty in ConcreteType) implies class in ConcreteClass
+}
+
+/*
+A          A is an abstract class
+-------------------------
+A: AbstractType<A>
+*/
+fact "C has type ConcreteType<C> when C is a concrete class" {
+   all v: Var | all class: Class |
+   (v.var_points_to = class and v.var_ty in AbstractType) implies class in AbstractClass
 }
 
 // ------------- helpers
@@ -179,33 +196,33 @@ fun static_resolve[call: Call]: Method {
     {m: Method | m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods}
 }
 
-pred descendent_of[descendent: ClassName, ancestor: ClassName] {
+pred inherits_from[descendent: Type, ancestor: Type] {
    ancestor.names_class in (descendent.names_class + descendent.names_class.^parent)
 }
 
 
 // ------------- pretty
 
-fact "non-essential eta rule for AbstractName that makes visualizations easier to read" {
-   all n1: AbstractName | all n2: AbstractName |
-   n1.names_class = n2.names_class
-   and n1.upcast = n2.upcast implies n2 = n1
+fact "non-essential eta rule for AbstractType that makes visualizations easier to read" {
+   all t1: AbstractType | all t2: AbstractType |
+   t1.names_class = t2.names_class
+   and t1.supertypes = t2.supertypes implies t2 = t1
 }
 
 
-fact "non-essential eta rule for ConcreteName that makes visualizations easier to read" {
-   all n1: ConcreteName | all n2: ConcreteName |
-   n1.names_class = n2.names_class
-   and n1.upcast = n2.upcast implies n2 = n1
+fact "non-essential eta rule for ConcreteType that makes visualizations easier to read" {
+   all t1: ConcreteType | all t2: ConcreteType |
+   t1.names_class = t2.names_class
+   and t1.supertypes = t2.supertypes implies t2 = t1
 }
 
-// ------------ ensure safety is non-trivial
-fact "non-trivial" {
+// ------------make it interesting
+pred show {
     some am: AbstractMethod | am in univ
     some call: Call | call in univ
 }
 // -------------commands
-//run  {}
+// run  show
 assert safe {  no c: Call | resolve[c] in AbstractMethod }
 check safe for 4 // up to 4 instances for every signature
 // check safe for 10
