@@ -112,9 +112,8 @@ def parse_facts(text):
                         facts[sig][name][prop] = []
                     facts[sig][name][prop].append(val)
 
-                    # print('adding val ', val, f'to {facts[sig][name]}.{prop}')
-                    #  = val
     return facts
+
 
 def facts_to_code_rep(facts):
     lines = []
@@ -127,7 +126,11 @@ def facts_to_code_rep(facts):
             if 'methods' in parent:
                 parent_methods = parent['methods']
             extends_str = f' extends {parent_id}'
-        lines.append(f'class {class_name}{extends_str}:')
+        if class_name in facts['AbstractClass']:
+            abstract_str = 'abstract '
+        else:
+            abstract_str = ''
+        lines.append(f'{abstract_str}class {class_name}{extends_str}:')
         if 'methods' in class_:
             for method_id in class_['methods']:
                 if method_id in parent_methods:
