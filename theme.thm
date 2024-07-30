@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<alloy>
+
+<view>
+
+<defaultnode/>
+
+<defaultedge attribute="yes"/>
+
+<node>
+   <type name="AbstractClass"/>
+   <type name="AbstractMethod"/>
+   <type name="AbstractType"/>
+   <type name="Call"/>
+   <type name="Class"/>
+   <type name="ConcreteClass"/>
+   <type name="ConcreteMethod"/>
+   <type name="ConcreteType"/>
+   <type name="Int"/>
+   <type name="LsbAttribute"/>
+   <type name="Method"/>
+   <type name="MethodName"/>
+   <type name="Receiver"/>
+   <type name="StaticKeyword"/>
+   <type name="String"/>
+   <type name="Type"/>
+   <type name="univ"/>
+   <type name="Var"/>
+   <type name="seq/Int"/>
+   <set name="$has_inherited_method_c1" type="Class"/>
+   <set name="$has_inherited_method_c2" type="Class"/>
+   <set name="$has_inherited_method_m" type="Method"/>
+   <set name="$has_interesting_method_call_call" type="Call"/>
+   <set name="$has_override_c1" type="Class"/>
+   <set name="$has_override_c2" type="Class"/>
+   <set name="$has_override_m" type="Method"/>
+</node>
+
+<edge attribute="no">
+   <relation name="call_method_name"> <type name="Call"/> <type name="MethodName"/> </relation>
+</edge>
+
+</view>
+
+</alloy>
