@@ -47,8 +47,15 @@ fact "all methods are in classes, all calls are in methods, all `MethodName`s ar
   all mn: MethodName | some m: Method | m.method_name = mn
 }
 
-fact "concrete classes cannot have abstract methods" {
+fact "concrete classes cannot have direct abstract methods" {
   all class: ConcreteClass | no m: AbstractMethod | m in class.methods
+}
+
+fact "concrete classes must have implementations for all methods" {
+    all c: ConcreteClass |
+    let method_names = (c + c.^parent).methods.method_name  |
+    let implemented_methods = (c + c.^parent).methods & ConcreteMethod |
+    method_names in implemented_methods.method_name
 }
 
 fact "A variable must have come (transitively) from naming a class" {
@@ -92,6 +99,7 @@ fact "typing: variable aliasing reflects subtyping" {
 // --------------- New typing rules
 fact "typing: aliasing rules" {
   all n1: ClassName | all n2: ClassName |
+  // all rules share the same conclusion
   n2 in n1.upcast implies (
 	rule_abstract_covariant[n1, n2]
        or rule_concrete_covariant[n1, n2]
@@ -100,25 +108,46 @@ fact "typing: aliasing rules" {
   )
 }
 
-
+/*
+T <: U
+----------------------------------
+AbstractName<T> <: AbstractName<U>
+*/
 pred rule_abstract_covariant[n1: ClassName, n2: ClassName] {
   n1 in AbstractName and n2 in AbstractName
   and descendent_of[n1, n2]
 }
 
+/*
+T <: U
+----------------------------------
+ConcreteName<T> <: ConcreteName<U>
+*/
 pred rule_concrete_covariant[n1: ClassName, n2: ClassName] {
   n1 in ConcreteName and n2 in ConcreteName
   and descendent_of[n1, n2]
 }
 
+/*
+T <: U
+----------------------------------
+ConcreteName<T> <: AbstractName<U>
+*/
 pred rule_concrete_to_abstract[n1: ClassName, n2: ClassName] {
   n1 in ConcreteName and n2 in AbstractName
   and descendent_of[n1, n2]
 }
 
+/*
+T <: U                       U is a concrete class
+----------------------------------
+AbstractName<T> <: ConcreteName<U>
+*/
 pred rule_abstract_to_concrete[n1: ClassName, n2: ClassName] {
   n1 in AbstractName and n2 in ConcreteName
-  and descendent_of[n1, n2] and n2.names_class in ConcreteClass
+  and descendent_of[n1, n2]
+  // the last conjunct is important. Comment it out to see a counterexample showing unsafety
+  and n2.names_class in ConcreteClass
 }
 
 
