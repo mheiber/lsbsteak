@@ -62,7 +62,6 @@ fact "A variable must have come (transitively) from naming a class" {
   all v: Var | one class: Class | class in v.^var_points_to
 }
 
-// fact "all calls are resolved" { all call: Call | one m: Method | resolve[call] = m}
 fact "method names are unique in a class" {
   all c: Class | all m1: Method | all m2: Method |
   m1 in c.methods and m1.method_name = m2.method_name implies m1 = m2 
@@ -86,12 +85,13 @@ fact "typing: an abstract method cannot override a concrete method " {
     implies m1 in ConcreteMethod
 }
 
-fact "typing: method must be statically visible. Example: in c.foo() (where c is a name for a class) foo must exist on that class" {
+fact "typing: method calls are well-typed. Example: in c.foo() (where c is a name for a class) foo must exist on that class" {
    all call: Call | one m: Method | static_resolve[call] = m
 }
 
 fact "typing: variable aliasing reflects subtyping" {
-   // upper: supertype = (lower: subtype)
+  // var lower: subtype = .....
+  // var upper: supertype = lower
   all upper: Var | all lower: Var | lower in upper.var_points_to implies upper.var_ty in lower.var_ty.upcast
 }
 
@@ -186,8 +186,15 @@ pred descendent_of[descendent: ClassName, ancestor: ClassName] {
 
 // ------------- pretty
 
-fact "non-essential eta rule for ClassName that makes visualizations easier to read" {
-   all n1: ClassName | all n2: ClassName |
+fact "non-essential eta rule for AbstractName that makes visualizations easier to read" {
+   all n1: AbstractName | all n2: AbstractName |
+   n1.names_class = n2.names_class
+   and n1.upcast = n2.upcast implies n2 = n1
+}
+
+
+fact "non-essential eta rule for ConcreteName that makes visualizations easier to read" {
+   all n1: ConcreteName | all n2: ConcreteName |
    n1.names_class = n2.names_class
    and n1.upcast = n2.upcast implies n2 = n1
 }
@@ -197,10 +204,11 @@ fact "non-trivial" {
     some am: AbstractMethod | am in univ
     some call: Call | call in univ
 }
-// -------------run it
+// -------------commands
 //run  {}
 assert safe {  no c: Call | resolve[c] in AbstractMethod }
-check safe for 3 but 1 Call
+check safe for 4 // up to 4 instances for every signature
+// check safe for 10
 
 
 
