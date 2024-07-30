@@ -51,11 +51,14 @@ fact "concrete classes cannot have direct abstract methods" {
   all class: ConcreteClass | no m: AbstractMethod | m in class.methods
 }
 
+fact "methods are inherited" {
+   all class: Class | all mn: class.^parent.methods.method_name |
+   mn in class.methods.method_name
+}
+
 fact "concrete classes must have implementations for all methods" {
     all c: ConcreteClass |
-    let method_names = (c + c.^parent).methods.method_name  |
-    let implemented_methods = (c + c.^parent).methods & ConcreteMethod |
-    method_names in implemented_methods.method_name
+    c.methods in ConcreteMethod
 }
 
 fact "A variable must have come (transitively) from naming a class" {
@@ -222,7 +225,7 @@ pred show {
     some call: Call | call in univ
 }
 // -------------commands
-// run  show
+run  show
 assert safe {  no c: Call | resolve[c] in AbstractMethod }
 check safe for 4 // up to 4 instances for every signature
 // check safe for 10
