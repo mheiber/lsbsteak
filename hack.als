@@ -201,21 +201,29 @@ fact "C has type ConcreteType<C> when C is a concrete class" {
 
 
 fact "calls through StaticKeyword only allowed in concrete classes or in LSB methods" {
-   all call: Call | call.receiver = StaticKeyword implies some class: Class | some method: class.methods |
-   call in method.calls implies class in ConcreteClass or method.is_lsb
+   all call: Call | call.receiver = StaticKeyword implies some method: Method |
+   call in method.calls implies (containing_class[method] in ConcreteClass or method.is_lsb)
 }
 
 fact "lsb attribute only allowed in abstract concrete methods (for simplicity)" {
-  all class: Class | all m: class.methods | m.is_lsb implies class in AbstractClass and m in AbstractMethod
+  all m: Method |
+     m.is_lsb implies (containing_class[m] in AbstractClass and m in ConcreteMethod)
 }
 
 fact "all methods in abstract classes that use static must have the LSB Attribute" {
-    all m: AbstractClass.methods | StaticKeyword in m.calls.receiver implies m.is_lsb
+    all m: Method | (containing_class[m] in AbstractClass and StaticKeyword in m.calls.receiver) implies m.is_lsb
 }
 
+// TODO:
 fact "all methods in abstract classes that call an LSB method must have the LSB Attribute" {
-   all m: AbstractClass.methods | static_resolve[m.calls].is_lsb
+   all m: Method | containing_class[m] in AbstractClass implies static_resolve[m.calls].is_lsb
 }
+
+fact "cannot call LSB methods through variables of type AbstractType" {
+  all call: Call | static_resolve[call].is_lsb and call.receiver in Var implies call.receiver.var_ty in ConcreteType
+}
+
+
 
 // ------------- helpers
 
@@ -229,32 +237,41 @@ fun resolve_var[v: Var]: one Class {
 
 // c.foo() where c is a name for a class resolves to method foo of c *or a sub-class of c* at runtime
 fun resolve[call: Call]: Method {
-    {m: Method | m.method_name = call.call_method_name and m in call.receiver.resolve_var.methods}
+    {m: Method |
+       (m.method_name = call.call_method_name and m in call.receiver.resolve_var.methods) 
+      or  (StaticKeyword = call.receiver and (
+         let class = containing_class[call] |
+         let name = containing_method[call].method_name |
+         m.method_name = name and m in (class + containing_class[m].^parent).methods
+      ))
+   }
 }
-
-fun containing_class[m: Method]: Class {
-  {class: Class | m in class.methods }
-}
-
-fun containing_class[call: Call]: Class {
-  {class: Class | call in class.methods.calls }
-}
-
-fun containing_method[call: Call]: Method {
-   {m: containing_class[call].methods | m.method_name = call.call_method_name }
-}
-
 
 // c.foo() where c is a name for a class "statically resolves" to method foo of c
 fun static_resolve[call: Call]: Method {
     {m: Method |
-      (m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods)
-      or  StaticKeyword = call.receiver and (
-         let class = containing_class[call] |
-         let name = containing_method[call].method_name |
-         m.method_name = name and m in (class + containing_class[m].^parent).methods
-      )
+         (m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods)
+     or (StaticKeyword = call.receiver and (
+              m.method_name = call.call_method_name and
+              m in containing_class[call].methods
+          ))
   }
+}
+
+
+fun containing_class[m: Method]: Class {
+  {
+     class: Class | m in class.methods and no child: Class |
+     class in child.^parent
+  }
+}
+
+fun containing_class[call: Call]: Class {
+  {class: Class | call in class.methods.calls and no child: Class | class in child.^parent }
+}
+
+fun containing_method[call: Call]: Method {
+   {m: containing_class[call].methods | m.method_name = call.call_method_name }
 }
 
 pred inherits_from[descendent: Type, ancestor: Type] {
@@ -300,6 +317,8 @@ pred has_override {
 pred show { 
   // at least 1 method is abstract
   some am: AbstractMethod | am in univ
+  // TODO: comment this out
+  some call: Call | call.receiver = StaticKeyword
 }
 
 pred show_complicated {
@@ -308,7 +327,7 @@ pred show_complicated {
   has_override
 }
 
-// run  show
+run  show
 // run show_complicated for 4
 
 // -------------check
