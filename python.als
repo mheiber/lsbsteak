@@ -29,7 +29,7 @@ sig Call {
    resolves_to = resolve[this]
 }
 
-sig ClassName {
+abstract sig ClassName {
    upcast: set ClassName,
    names_class: Class
 }
@@ -38,9 +38,27 @@ sig ConcreteName extends ClassName {}
 
 sig Var {
    var_ty: ClassName,
-   var_val: Class
+   var_val: Class,
+   var_points_to: one (Var + Class)
 }
 
+// ---------------vars
+fact {
+   all v1: Var | all v2: Var |
+   v1.var_points_to = v2 implies v2.var_ty in v1.var_ty.upcast
+}
+
+fact "A variable that directly names a concrete class must be concrete" {
+   all v: Var | all class: Class |
+   (v.var_points_to = class and v.var_ty in ConcreteName) implies class in ConcreteClass
+}
+fact "A variable must have come (transitively) from naming a class" {
+  all v: Var | v.var_val in v.^var_points_to
+}
+fact "Variable aliasing reflects subtyping" {
+   // v1: supertype = (v2: subtype)
+  all to: Var | all from: Var | to in from.var_points_to implies to.var_ty in from.var_ty.upcast
+}
 
 
 // --------------- Boring rules for well-formed classes
@@ -83,30 +101,65 @@ pred descendent_of[n1: ClassName, n2: ClassName] {
 }
 
 // --------------- New typing rules
-fact "typing: AbstractName is covariant" {
-  all n1: AbstractName |
-  all n2: AbstractName |
-  n2 in n1.upcast  implies descendent_of[n1, n2]
+fact "typing: aliasing rules" {
+  all n1: ClassName | all n2: ClassName |
+  n2 in n1.upcast implies (
+	rule_abstract_covariant[n1, n2] or
+       rule_concrete_covariant[n1, n2] or
+       rule_concrete_to_abstract[n1, n2] or
+       rule_abstract_to_concrete[n1, n2]
+  )
 }
 
-fact "typing: ConcreteName is covariant" {
-  all n1: ConcreteName |
-  all n2: ConcreteName |
-  n2 in n1.upcast implies descendent_of[n1, n2]
+pred rule_abstract_covariant[n1: ClassName, n2: ClassName] {
+  n1 in AbstractName and n2 in AbstractName
+  and n2 in n1.upcast  
+  and descendent_of[n1, n2]
 }
 
-fact "typing: ConcreteName to AbstractName" {
-  all n1: ConcreteName |
-  all n2: AbstractName |
-  n2 in n1.upcast  implies descendent_of[n1, n2]
+pred rule_concrete_covariant[n1: ClassName, n2: ClassName] {
+  n1 in ConcreteName and n2 in ConcreteName
+  and n2 in n1.upcast  
+  and descendent_of[n1, n2]
 }
+
+pred rule_concrete_to_abstract[n1: ClassName, n2: ClassName] {
+  n1 in ConcreteName and n2 in AbstractName
+  and n2 in n1.upcast  
+  and descendent_of[n1, n2]
+}
+
+pred rule_abstract_to_concrete[n1: ClassName, n2: ClassName] {
+  n1 in AbstractName and n2 in ConcreteName
+  and n2 in n1.upcast  
+  and descendent_of[n1, n2] and n2.names_class in ConcreteClass
+}
+
+//fact "typing: AbstractName is covariant" {
+//  all n1: AbstractName |
+//  all n2: AbstractName |
+//  n2 in n1.upcast  implies descendent_of[n1, n2]
+//}
+//
+//
+//fact "typing: ConcreteName is covariant" {
+//  all n1: ConcreteName |
+//  all n2: ConcreteName |
+//  n2 in n1.upcast implies descendent_of[n1, n2]
+//}
+//
+//fact "typing: ConcreteName to AbstractName" {
+//  all n1: ConcreteName |
+//  all n2: AbstractName |
+//  n2 in n1.upcast  implies descendent_of[n1, n2]
+//}
 //
 //fact "typing: AbstractName to ConcreteName" { // TODO! reinstate this rule
 //  all n1: AbstractName |
 //  all n2: ConcreteName |
 //  n2 in n1.upcast implies descendent_of[n1, n2] and n2.names_class in ConcreteClass
 //}
-//
+
 
 
 
@@ -142,13 +195,14 @@ fun static_resolve[call: Call]: Method {
 
 fact "non-essential eta rule for AbstractName that makes visualizations easier to read" {
    all an: AbstractName | all an2: AbstractName |
-   an2.names_class = an.names_class implies an = an2
+   an2.names_class = an.names_class
+   and an2.upcast = an.upcast implies an = an2
 }
 
 // -------------run it
 //run show {some m: AbstractMethod | m in AbstractMethod and some call: Call | call in Call }
 assert safe {  no c: Call | resolve[c] in AbstractMethod }
-check safe
+check safe for 2
 
 
 
