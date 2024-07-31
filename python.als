@@ -38,12 +38,11 @@ sig Var {
 // --------------- Boring well-formedness conditions
 
 fact "no class is its own ancestor" {
-   all c: Class | c not in c.^parent
+   no Class.(iden & ^parent)
 }
 
-fact "all methods are in classes, all calls are in methods, all `MethodName`s name a method" {
+fact "all methods are in classes,  all `MethodName`s name a method" {
   all m: Method | some c: Class | m in c.methods
-  all call: Call | some m: Method | call in m.calls
   all mn: MethodName | some m: Method | m.method_name = mn
 }
 
@@ -87,8 +86,11 @@ fact "dynamic method resolution" {
 // --------------- Pre-existing, obvious type-checking
 
 fact "typing: an abstract method cannot override a concrete method " {
-    all class: Class | all disj m1, overridden: (class + class.parent).methods | 
-    overridden in ConcreteMethod implies m1 in ConcreteMethod
+    all class: Class | all m, overridden: Method |
+    { m.method_name = overridden.method_name
+      m in (class.methods & AbstractMethod)
+      overridden in class.parent.methods
+    } implies m in ConcreteMethod
 }
 
 fact "typing: method calls are well-typed. Example: in c.foo() (where c is a name for a class) foo must exist on that class" {
@@ -203,7 +205,7 @@ fun static_resolve[call: Call]: Method {
 }
 
 pred inherits_from[descendent: Type, ancestor: Type] {
-   ancestor.names_class in (descendent.names_class + descendent.names_class.^parent)
+   ancestor.names_class in (descendent.names_class.*parent + descendent.names_class.^parent)
 }
 
 
@@ -254,7 +256,7 @@ pred show_complicated {
 }
 
 // run  show
-// run show_complicated for 4
+//run show_complicated for 3
 
 // -------------check
 

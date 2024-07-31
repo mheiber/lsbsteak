@@ -92,8 +92,7 @@ skolem $has_override_c2={ConcreteClass$0}
 
 from collections import defaultdict
 
-def parse_facts(text):
-    facts = defaultdict(dict)
+def parse_facts(text): facts = defaultdict(dict)
     for line in text.split('\n'):
         if not line.startswith('this/'):
             continue
@@ -115,7 +114,7 @@ def parse_facts(text):
     return facts
 
 
-def facts_to_code_rep(facts):
+def facts_to_code(facts):
     lines = []
     for class_name, class_ in facts['Class'].items():
         extends_str = ''
@@ -155,13 +154,12 @@ def facts_to_code_rep(facts):
 
 
 
-    return lines
+    return '\n'.join(lines)
 
 
 def main():
     facts = parse_facts(text)
-    code_rep = facts_to_code_rep(facts)
-    print('\n'.join(code_rep))
+    print(facts_to_code(facts))
 
 if __name__ == '__main__':
     main()
