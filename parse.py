@@ -1,98 +1,48 @@
-
 text = r'''
 loop=0
 end=0
 integers={-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7}
-univ={-1, -2, -3, -4, -5, -6, -7, -8, 0, 1, 2, 3, 4, 5, 6, 7, AbstractClass$0, AbstractType$0, Call$0, ConcreteMethod$0, ConcreteMethod$1, LsbAttribute$0, MethodName$0, MethodName$1, StaticKeyword$0, Var$0, Var$1}
-Int={-1, -2, -3, -4, -5, -6, -7, -8, 0, 1, 2, 3, 4, 5, 6, 7}
-seq/Int={0, 1, 2}
-String={}
-none={}
-this/Class={AbstractClass$0}
-this/Class<:methods={AbstractClass$0->ConcreteMethod$0, AbstractClass$0->ConcreteMethod$1}
-this/Class<:parent={}
-this/AbstractClass={AbstractClass$0}
-this/ConcreteClass={}
-this/MethodName={MethodName$0, MethodName$1}
-this/Method={ConcreteMethod$0, ConcreteMethod$1}
-this/Method<:method_name={ConcreteMethod$0->MethodName$1, ConcreteMethod$1->MethodName$0}
-this/ConcreteMethod={ConcreteMethod$0, ConcreteMethod$1}
-this/ConcreteMethod<:calls={ConcreteMethod$1->Call$0}
-this/ConcreteMethod<:lsbAttribute={ConcreteMethod$0->LsbAttribute$0, ConcreteMethod$1->LsbAttribute$0}
-this/AbstractMethod={}
-this/Call={Call$0}
-this/Call<:receiver={Call$0->StaticKeyword$0}
-this/Call<:call_method_name={Call$0->MethodName$0}
-this/Call<:resolves_to={Call$0->ConcreteMethod$1}
-this/Type={AbstractType$0}
-this/Type<:supertypes={AbstractType$0->AbstractType$0}
-this/Type<:names_class={AbstractType$0->AbstractClass$0}
-this/AbstractType={AbstractType$0}
-this/ConcreteType={}
-this/Receiver={StaticKeyword$0, Var$0, Var$1}
-this/StaticKeyword={StaticKeyword$0}
-this/Var={Var$0, Var$1}
-this/Var<:var_ty={Var$0->AbstractType$0, Var$1->AbstractType$0}
-this/Var<:var_points_to={Var$0->Var$1, Var$1->AbstractClass$0}
-this/LsbAttribute={LsbAttribute$0}
-skolem $show_c={ConcreteMethod$0->AbstractClass$0, ConcreteMethod$1->AbstractClass$0}
-skolem $show_m={Call$0->ConcreteMethod$1}
-skolem $show_m'={MethodName$0->ConcreteMethod$1, MethodName$1->ConcreteMethod$0}
-skolem $show_call={Call$0}
-'''
-
-text = r'''
-loop=0
-end=0
-integers={-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7}
-univ={-1, -2, -3, -4, -5, -6, -7, -8, 0, 1, 2, 3, 4, 5, 6, 7, AbstractType$0, AbstractType$1, Call$0, Call$1, ConcreteClass$0, ConcreteClass$1, ConcreteMethod$0, ConcreteMethod$1, ConcreteMethod$2, ConcreteType$0, ConcreteType$1, LsbAttribute$0, MethodName$0, MethodName$1, StaticKeyword$0, Var$0, Var$1, Var$2}
+univ={-1, -2, -3, -4, -5, -6, -7, -8, 0, 1, 2, 3, 4, 5, 6, 7, AbstractClass$0, AbstractClass$1, AbstractMethod$0, AbstractName$0, AbstractName$1, Call$0, ConcreteMethod$0, ConcreteMethod$1, MethodName$0, MethodName$1, StaticKeyword$0, UseStaticAttribute$0, Var$0, Var$1}
 Int={-1, -2, -3, -4, -5, -6, -7, -8, 0, 1, 2, 3, 4, 5, 6, 7}
 seq/Int={0, 1, 2, 3}
 String={}
 none={}
-this/Class={ConcreteClass$0, ConcreteClass$1}
-this/Class<:methods={ConcreteClass$0->ConcreteMethod$0, ConcreteClass$0->ConcreteMethod$2, ConcreteClass$1->ConcreteMethod$1, ConcreteClass$1->ConcreteMethod$2}
-this/Class<:parent={ConcreteClass$1->ConcreteClass$0}
-this/AbstractClass={}
-this/ConcreteClass={ConcreteClass$0, ConcreteClass$1}
+this/Class={AbstractClass$0, AbstractClass$1}
+this/Class<:methods={AbstractClass$0->AbstractMethod$0, AbstractClass$0->ConcreteMethod$1, AbstractClass$1->ConcreteMethod$0}
+this/Class<:parent={AbstractClass$0->AbstractClass$1}
+this/AbstractClass={AbstractClass$0, AbstractClass$1}
+this/ConcreteClass={}
 this/MethodName={MethodName$0, MethodName$1}
-this/Method={ConcreteMethod$0, ConcreteMethod$1, ConcreteMethod$2}
-this/Method<:method_name={ConcreteMethod$0->MethodName$1, ConcreteMethod$1->MethodName$1, ConcreteMethod$2->MethodName$0}
-this/ConcreteMethod={ConcreteMethod$0, ConcreteMethod$1, ConcreteMethod$2}
-this/ConcreteMethod<:calls={ConcreteMethod$2->Call$0, ConcreteMethod$2->Call$1}
-this/ConcreteMethod<:lsbAttribute={ConcreteMethod$0->LsbAttribute$0, ConcreteMethod$1->LsbAttribute$0, ConcreteMethod$2->LsbAttribute$0}
-this/AbstractMethod={}
-this/Call={Call$0, Call$1}
-this/Call<:receiver={Call$0->Var$2, Call$1->Var$1}
-this/Call<:call_method_name={Call$0->MethodName$0, Call$1->MethodName$1}
-this/Call<:resolves_to={Call$0->ConcreteMethod$2, Call$1->ConcreteMethod$1}
-this/Type={AbstractType$0, AbstractType$1, ConcreteType$0, ConcreteType$1}
-this/Type<:supertypes={AbstractType$1->AbstractType$0, AbstractType$1->AbstractType$1, AbstractType$1->ConcreteType$1, ConcreteType$0->AbstractType$0, ConcreteType$0->AbstractType$1, ConcreteType$0->ConcreteType$0, ConcreteType$0->ConcreteType$1, ConcreteType$1->ConcreteType$1}
-this/Type<:names_class={AbstractType$0->ConcreteClass$1, AbstractType$1->ConcreteClass$1, ConcreteType$0->ConcreteClass$1, ConcreteType$1->ConcreteClass$0}
-this/AbstractType={AbstractType$0, AbstractType$1}
-this/ConcreteType={ConcreteType$0, ConcreteType$1}
-this/Receiver={StaticKeyword$0, Var$0, Var$1, Var$2}
+this/Method={AbstractMethod$0, ConcreteMethod$0, ConcreteMethod$1}
+this/Method<:method_name={AbstractMethod$0->MethodName$0, ConcreteMethod$0->MethodName$1, ConcreteMethod$1->MethodName$1}
+this/ConcreteMethod={ConcreteMethod$0, ConcreteMethod$1}
+this/ConcreteMethod<:calls={ConcreteMethod$0->Call$0}
+this/ConcreteMethod<:use_static_attribute={ConcreteMethod$1->UseStaticAttribute$0}
+this/AbstractMethod={AbstractMethod$0}
+this/Call={Call$0}
+this/Call<:receiver={Call$0->Var$1}
+this/Call<:call_method_name={Call$0->MethodName$0}
+this/Call<:resolves_to={Call$0->AbstractMethod$0}
+this/Type={AbstractName$0, AbstractName$1}
+this/Type<:supertypes={AbstractName$1->AbstractName$0}
+this/Type<:names_class={AbstractName$0->AbstractClass$1, AbstractName$1->AbstractClass$0}
+this/AbstractName={AbstractName$0, AbstractName$1}
+this/ConcreteName={}
+this/Receiver={StaticKeyword$0, Var$0, Var$1}
 this/StaticKeyword={StaticKeyword$0}
-this/Var={Var$0, Var$1, Var$2}
-this/Var<:var_ty={Var$0->ConcreteType$0, Var$1->ConcreteType$1, Var$2->ConcreteType$1}
-this/Var<:var_points_to={Var$0->ConcreteClass$1, Var$1->Var$0, Var$2->Var$1}
-this/LsbAttribute={LsbAttribute$0}
-skolem $show_complicated_c={ConcreteMethod$0->ConcreteClass$0, ConcreteMethod$1->ConcreteClass$1, ConcreteMethod$2->ConcreteClass$0}
-skolem $show_complicated_m={Call$0->ConcreteMethod$2, Call$1->ConcreteMethod$2}
-skolem $show_complicated_m'={MethodName$0->ConcreteMethod$2, MethodName$1->ConcreteMethod$0}
-skolem $has_inherited_method_m={ConcreteMethod$2}
-skolem $has_inherited_method_c1={ConcreteClass$1}
-skolem $has_inherited_method_c2={ConcreteClass$0}
-skolem $has_interesting_method_call_call={Call$1}
-skolem $has_override_m={ConcreteMethod$1}
-skolem $has_override_c1={ConcreteClass$1}
-skolem $has_override_c2={ConcreteClass$0}
-
+this/Var={Var$0, Var$1}
+this/Var<:var_ty={Var$0->AbstractName$1, Var$1->AbstractName$0}
+this/Var<:var_points_to={Var$0->AbstractClass$0, Var$1->Var$0}
+this/UseStaticAttribute={UseStaticAttribute$0}
+skolem $c={AbstractMethod$0->AbstractClass$0, ConcreteMethod$0->AbstractClass$1, ConcreteMethod$1->AbstractClass$0}
+skolem $m={MethodName$0->AbstractMethod$0, MethodName$1->ConcreteMethod$1}
+skolem $call={Call$0}
 '''
 
 from collections import defaultdict
 
-def parse_facts(text): facts = defaultdict(dict)
+def parse_facts(text):
+    facts = defaultdict(dict)
     for line in text.split('\n'):
         if not line.startswith('this/'):
             continue
@@ -116,7 +66,7 @@ def parse_facts(text): facts = defaultdict(dict)
 
 def facts_to_code(facts):
     lines = []
-    for class_name, class_ in facts['Class'].items():
+    for class_name, class_ in reversed(facts['Class'].items()):
         extends_str = ''
         parent_methods = []
         if 'parent' in class_:
@@ -129,7 +79,7 @@ def facts_to_code(facts):
             abstract_str = 'abstract '
         else:
             abstract_str = ''
-        lines.append(f'{abstract_str}class {class_name}{extends_str}:')
+        lines.append(f'{abstract_str}class {class_name}{extends_str}')
         if 'methods' in class_:
             for method_id in class_['methods']:
                 if method_id in parent_methods:
@@ -139,7 +89,7 @@ def facts_to_code(facts):
                 if method_id in facts['AbstractMethod']:
                     lines.append(f'  abstract def {method_name}')
                 else:
-                    lines.append(f'  def {method_name}:     # {method_id}')
+                    lines.append(f'  def {method_name}     # {method_id}')
                 if method_id in facts['ConcreteMethod']:
                     concrete_method = facts['ConcreteMethod'][method_id]
                     if 'calls' in concrete_method:
@@ -149,8 +99,18 @@ def facts_to_code(facts):
                             method_name = call['call_method_name'][0]
                             comment = 'resolves to ' + ', '.join(call['resolves_to'])
                             lines.append(f'    {receiver}.{method_name}()     # {comment}')
-
         lines.append('\n')
+    for var_id, var in facts['Var'].items():
+        var_ty_id = var['var_ty'][0]
+        names_class = facts['Type'][var_ty_id]['names_class'][0]
+        if var_ty_id in facts['AbstractName']:
+            ty_str = f'classname<{names_class}>'
+        elif var_ty_id in facts['ConcreteName']:
+            ty_str = f'classname<{names_class}>'
+        else:
+            raise Exception(f'could not find type {var_ty_id}')
+        points_to = var['var_points_to'][0]
+        lines.append(f'{var_id} : {ty_str} = {points_to}')
 
 
 
@@ -159,7 +119,9 @@ def facts_to_code(facts):
 
 def main():
     facts = parse_facts(text)
+    print('\n')
     print(facts_to_code(facts))
+    print('\n')
 
 if __name__ == '__main__':
     main()
