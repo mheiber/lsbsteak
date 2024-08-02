@@ -22,7 +22,7 @@ sig AbstractMethod extends Method {}
 sig Call {
    receiver: Receiver,
    call_method_name: MethodName,
-   resolves_to: Method,
+   resolves_to: Method, // TODO! should remove the lone
 }
 
 abstract sig Type {
@@ -99,17 +99,16 @@ fact "dynamic method resolution" {
 // --------------- Pre-existing, obvious type-checking
 
 fact "typing: an abstract method cannot override a concrete method " {
-    all class: Class | all m, overridden: Method |
+    all class: Class | all m: class.methods, overridden: class.parent.methods |
     { m.method_name = overridden.method_name
-      m in (class.methods & AbstractMethod)
-      overridden in class.parent.methods
+      overridden in ConcreteMethod
     } implies m in ConcreteMethod
 }
 
 // TODO
-// fact "typing: method calls are well-typed. Example: in c.foo() (where c is a name for a class) foo must exist on that class" {
-//    all call: Call | one m: Method | static_resolve[call] = m
-// }
+fact "typing: method calls are to visible methods. Example: in c.foo() (where c is a name for a class) foo must exist on that class" {
+   all call: Call | some m: Method | static_resolve[call] = m
+}
 
 fact "typing: variable aliasing reflects subtyping" {
   // var lower: subtype = .....
@@ -226,23 +225,22 @@ pred use_static[m: Method] {
   UseStaticAttribute in m.use_static_attribute
 }
 
-fun resolve_var[v: Var]: one Class {
-    {class: Class | class in v.^var_points_to} // guaranteed to be exactly one due to fact above
+fun resolve_var: Var -> Class {
+    {v: Var, class: Class | class in v.^var_points_to}
 }
 
 // c.foo() where c is a name for a class resolves to method foo of c *or a sub-class of c* at runtime
 fun resolve[call: Call]: Method {
     {m: Method |
-       (m.method_name = call.call_method_name and m in call.receiver.resolve_var.methods) 
-      or  (StaticKeyword = call.receiver and (
-         let class = containing_class[call] |
-         let name = containing_method[call].method_name |
-         m.method_name = name and m in (class + containing_class[m].^parent).methods
-      ))
-   }
+      m.method_name = call.call_method_name and
+      (call.receiver in Var implies
+        m in call.receiver.resolve_var.methods) and
+      (call.receiver in StaticKeyword implies
+        call.containing_class in m.~methods.*parent )
+    }
 }
 
-// c.foo() where c is a name for a class "statically resolves" to method foo of c
+// c.foo() where c is a name for a class "statically resolves" to method foo of c (in the sense of "static type checking")
 fun static_resolve[call: Call]: Method {
     {m: Method |
          (m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods)
@@ -256,8 +254,9 @@ fun static_resolve[call: Call]: Method {
 
 fun containing_class[m: Method]: Class {
   {
-     class: Class | m in class.methods and
-     no ancestor: class.^parent | m in ancestor.methods
+    class: Class |
+    m in class.methods and
+    m not in class.^parent.methods
   }
 }
 
@@ -270,7 +269,7 @@ fun containing_method[call: Call]: Method {
 }
 
 pred inherits_from[descendent: Type, ancestor: Type] {
-   ancestor.names_class in (descendent.names_class + descendent.names_class.^parent)
+   ancestor.names_class in descendent.names_class.*parent
 }
 
 
@@ -324,22 +323,40 @@ run  show for 3
 run show_complicated for 4
 
 run {
-  some c: AbstractClass | some m: c.methods |
-  some abs_meth: c.methods & AbstractMethod |
-  some call: m.calls |
+  some abs_meth: AbstractMethod |
+  some call: Call |
     {
       call.receiver = StaticKeyword
       call.call_method_name = abs_meth.method_name
-      not m.use_static
-      // call.resolve in AbstractMethod
+      not call.containing_method.use_static
+
     } 
 } 
+/**
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+TODO: should be able to have this happen.
+problem is probably with static_resolve or with resolve
+
+abstract class A:
+  abstract abs()
+  <<__UseStatic>>
+  m1():
+    static::abs
+
+*/
 run {
-  some call: Call |
+  some class: Class, call: class.methods.calls |
       {
-        call.resolve in AbstractMethod
+        call.receiver in StaticKeyword
+        // call.call_method_name in (class.methods & AbstractMethod).method_name
+        // call.static_resolve in AbstractMethod
       }
 } 
+run {
+  some class: AbstractClass, call: class.methods.calls | {
+    call.receiver in StaticKeyword
+  }
+}
 
 // -------------check
 

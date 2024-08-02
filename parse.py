@@ -1,43 +1,9 @@
-text = r'''
-loop=0
-end=0
-integers={-8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7}
-univ={-1, -2, -3, -4, -5, -6, -7, -8, 0, 1, 2, 3, 4, 5, 6, 7, AbstractClass$0, AbstractClass$1, AbstractMethod$0, AbstractName$0, AbstractName$1, Call$0, ConcreteMethod$0, ConcreteMethod$1, MethodName$0, MethodName$1, StaticKeyword$0, UseStaticAttribute$0, Var$0, Var$1}
-Int={-1, -2, -3, -4, -5, -6, -7, -8, 0, 1, 2, 3, 4, 5, 6, 7}
-seq/Int={0, 1, 2, 3}
-String={}
-none={}
-this/Class={AbstractClass$0, AbstractClass$1}
-this/Class<:methods={AbstractClass$0->AbstractMethod$0, AbstractClass$0->ConcreteMethod$1, AbstractClass$1->ConcreteMethod$0}
-this/Class<:parent={AbstractClass$0->AbstractClass$1}
-this/AbstractClass={AbstractClass$0, AbstractClass$1}
-this/ConcreteClass={}
-this/MethodName={MethodName$0, MethodName$1}
-this/Method={AbstractMethod$0, ConcreteMethod$0, ConcreteMethod$1}
-this/Method<:method_name={AbstractMethod$0->MethodName$0, ConcreteMethod$0->MethodName$1, ConcreteMethod$1->MethodName$1}
-this/ConcreteMethod={ConcreteMethod$0, ConcreteMethod$1}
-this/ConcreteMethod<:calls={ConcreteMethod$0->Call$0}
-this/ConcreteMethod<:use_static_attribute={ConcreteMethod$1->UseStaticAttribute$0}
-this/AbstractMethod={AbstractMethod$0}
-this/Call={Call$0}
-this/Call<:receiver={Call$0->Var$1}
-this/Call<:call_method_name={Call$0->MethodName$0}
-this/Call<:resolves_to={Call$0->AbstractMethod$0}
-this/Type={AbstractName$0, AbstractName$1}
-this/Type<:supertypes={AbstractName$1->AbstractName$0}
-this/Type<:names_class={AbstractName$0->AbstractClass$1, AbstractName$1->AbstractClass$0}
-this/AbstractName={AbstractName$0, AbstractName$1}
-this/ConcreteName={}
-this/Receiver={StaticKeyword$0, Var$0, Var$1}
-this/StaticKeyword={StaticKeyword$0}
-this/Var={Var$0, Var$1}
-this/Var<:var_ty={Var$0->AbstractName$1, Var$1->AbstractName$0}
-this/Var<:var_points_to={Var$0->AbstractClass$0, Var$1->Var$0}
-this/UseStaticAttribute={UseStaticAttribute$0}
-skolem $c={AbstractMethod$0->AbstractClass$0, ConcreteMethod$0->AbstractClass$1, ConcreteMethod$1->AbstractClass$0}
-skolem $m={MethodName$0->AbstractMethod$0, MethodName$1->ConcreteMethod$1}
-skolem $call={Call$0}
-'''
+import os
+from pathlib import Path
+
+with open(Path(os.environ['HOME']) / 'out.txt') as f:
+    text = f.read()
+
 
 from collections import defaultdict
 
@@ -87,30 +53,35 @@ def facts_to_code(facts):
                 method = facts['Method'][method_id]
                 method_name = method['method_name'][0]
                 if method_id in facts['AbstractMethod']:
-                    lines.append(f'  abstract def {method_name}')
-                else:
-                    lines.append(f'  def {method_name}     # {method_id}')
+                    lines.append(f'  abstract static function {method_name}()   // {method_id}')
                 if method_id in facts['ConcreteMethod']:
                     concrete_method = facts['ConcreteMethod'][method_id]
+                    if 'use_static_attribute' in concrete_method:
+                        if len(concrete_method['use_static_attribute']):
+                            lines.append('  <<__UseStatic>>')
+                    lines.append(f'  static function {method_name}()            // {method_id}')
                     if 'calls' in concrete_method:
                         for call_id in concrete_method['calls']:
                             call = facts['Call'][call_id]
                             receiver = call['receiver'][0]
+                            if receiver == 'StaticKeyword$0':
+                                receiver = 'static'
                             method_name = call['call_method_name'][0]
-                            comment = 'resolves to ' + ', '.join(call['resolves_to'])
-                            lines.append(f'    {receiver}.{method_name}()     # {comment}')
+                            resolves_to = 'resolves to ' + ', '.join(call['resolves_to'])
+                            lines.append(f'    {receiver}::{method_name}()     // {call_id} {resolves_to}')
         lines.append('\n')
     for var_id, var in facts['Var'].items():
-        var_ty_id = var['var_ty'][0]
-        names_class = facts['Type'][var_ty_id]['names_class'][0]
-        if var_ty_id in facts['AbstractName']:
-            ty_str = f'classname<{names_class}>'
-        elif var_ty_id in facts['ConcreteName']:
-            ty_str = f'classname<{names_class}>'
-        else:
-            raise Exception(f'could not find type {var_ty_id}')
-        points_to = var['var_points_to'][0]
-        lines.append(f'{var_id} : {ty_str} = {points_to}')
+        if 'var_ty' in var:
+            var_ty_id = var['var_ty'][0]
+            names_class = facts['Type'][var_ty_id]['names_class'][0]
+            if var_ty_id in facts['AbstractName']:
+                ty_str = f'classname<{names_class}>'
+            elif var_ty_id in facts['ConcreteName']:
+                ty_str = f'classname<{names_class}>'
+            else:
+                raise Exception(f'could not find type {var_ty_id}')
+            points_to = var['var_points_to'][0]
+            lines.append(f'{var_id} : {ty_str} = {points_to}')
 
 
 

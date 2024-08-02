@@ -47,17 +47,17 @@ fact "all methods are in classes,  all `MethodName`s name a method" {
 }
 
 fact "concrete classes cannot contain abstract methods" {
-  all class: ConcreteClass | no m: AbstractMethod | m in class.methods
+  no ConcreteClass.methods & AbstractMethod
 }
 
 
 fact "concrete classes must have implementations for all methods" {
-    all c: ConcreteClass | c.methods in ConcreteMethod
+    ConcreteClass.methods in ConcreteMethod
 }
 
 fact "a class must have all the method names of its parent" {
-   all class: Class | all mn: class.parent.methods.method_name |
-   mn in class.methods.method_name
+   all class: Class | 
+   class.parent.methods.method_name in class.methods.method_name
 }
 
 fact "methods are only inherited from parents" {
