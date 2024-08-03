@@ -43,7 +43,7 @@ sig Var extends Receiver {
 
 
 //-------------new things
-sig AbstractName, ConcreteName extends Type {}
+sig ClassName, ConcreteClassName extends Type {}
 one sig ConcreteClassAttribute {}
 
 
@@ -136,30 +136,30 @@ fact "typing: aliasing rules" {
 /*
 T inherits from U
 ----------------------------------
-AbstractName<T> <: AbstractName<U>
+ClassName<T> <: ClassName<U>
 */
 pred rule_abstract_covariant[t1, t2: Type] {
-  t1 in AbstractName and t2 in AbstractName
+  t1 in ClassName and t2 in ClassName
   and inherits_from[t1, t2]
 }
 
 /*
 T inherits from U
 ----------------------------------
-ConcreteName<T> <: ConcreteName<U>
+ConcreteClassName<T> <: ConcreteClassName<U>
 */
 pred rule_concrete_covariant[t1, t2: Type] {
-  t1 in ConcreteName and t2 in ConcreteName
+  t1 in ConcreteClassName and t2 in ConcreteClassName
   and inherits_from[t1, t2]
 }
 
 /*
 T inherits from U
 ----------------------------------
-ConcreteName<T> <: AbstractName<U>
+ConcreteClassName<T> <: ClassName<U>
 */
 pred rule_concrete_to_abstract[t1, t2: Type] {
-  t1 in ConcreteName and t2 in AbstractName
+  t1 in ConcreteClassName and t2 in ClassName
   and inherits_from[t1, t2]
 }
 
@@ -168,16 +168,16 @@ UNSOUND: including here just for the neat counterexamples if you un-comment its 
 */
 pred bad_rule_abstract_to_concrete[t1: Type, t2: Type] {
   {
-    t1 in AbstractName and t2 in ConcreteName
+    t1 in ClassName and t2 in ConcreteClassName
     inherits_from[t1, t2]
     t2.names_class in ConcreteClass
   }
 }
 
 
-fact "typing: can't call abstract or <<__ConcreteClass>> methods through AbstractName" {
+fact "typing: can't call abstract or <<__ConcreteClass>> methods through ClassName" {
   all call: Call | 
-    (call.receiver in Var and call.receiver.var_ty in AbstractName)
+    (call.receiver in Var and call.receiver.var_ty in ClassName)
     implies (
       static_resolve[call] in ConcreteMethod
       and not static_resolve[call].has_concrete_class_attr
@@ -201,23 +201,23 @@ fact "typing: can only call <<__ConcreteClass>> and abstract methods through Sta
 /*
 C         C is a concrete class
 -------------------------
-C: ConcreteName<C>
+C: ConcreteClassName<C>
 
 */
-fact "C has type ConcreteName<C> when C is a concrete class" {
+fact "C has type ConcreteClassName<C> when C is a concrete class" {
    all v: Var | all class: Class |
-   (v.var_points_to = class and v.var_ty in ConcreteName) implies
+   (v.var_points_to = class and v.var_ty in ConcreteClassName) implies
    (class in ConcreteClass and v.var_ty.names_class = class)
 }
 
 /*
 A          A is an abstract class
 -------------------------
-A: AbstractName<A>
+A: ClassName<A>
 */
-fact "C has type ConcreteName<C> when C is a concrete class" {
+fact "C has type ConcreteClassName<C> when C is a concrete class" {
    all v: Var | all class: Class |
-   (v.var_points_to = class and v.var_ty in AbstractName) implies
+   (v.var_points_to = class and v.var_ty in ClassName) implies
    (class in AbstractClass and v.var_ty.names_class = class)
 }
 
@@ -334,15 +334,15 @@ pred inherits_from[descendent: Type, ancestor: Type] {
 
 // ------------- pretty
 
-fact "non-essential eta rule for AbstractName that makes visualizations easier to read" {
-   all t1, t2: AbstractName |
+fact "non-essential eta rule for ClassName that makes visualizations easier to read" {
+   all t1, t2: ClassName |
    t1.names_class = t2.names_class
    and t1.supertypes = t2.supertypes implies t2 = t1
 }
 
 
-fact "non-essential eta rule for ConcreteName that makes visualizations easier to read" {
-   all t1, t2: ConcreteName |
+fact "non-essential eta rule for ConcreteClassName that makes visualizations easier to read" {
+   all t1, t2: ConcreteClassName |
    t1.names_class = t2.names_class
    and t1.supertypes = t2.supertypes implies t2 = t1
 }
