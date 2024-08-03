@@ -1,16 +1,18 @@
-//------------boring things
+sig MethodName {}
+
+abstract sig Method {
+  method_name: one MethodName
+}
+
+// On the representation of methods of a class:
+// - "inheritance" is when two classes share a method
+// - "overriding" is when subclass has a class with the same name as the name of a class in the parent
 abstract sig Class {
    methods: set Method,
    parent: lone Class
 }
 
 sig AbstractClass, ConcreteClass extends Class {}
-
-sig MethodName {}
-
-abstract sig Method {
-  method_name: one MethodName
-}
 
 sig ConcreteMethod extends Method {
   calls: set Call,
@@ -22,14 +24,13 @@ sig AbstractMethod extends Method {}
 sig Call {
    receiver: Receiver,
    call_method_name: MethodName,
-   resolves_to: some Method, // static::foo() may resolve to methods of multiple classes
+   resolves_to: some Method, // note: static::foo() may resolve to methods of multiple classes
 }
 
 abstract sig Type {
    supertypes: set Type,
    names_class: Class
 }
-
 
 abstract sig Receiver {}
 
@@ -57,8 +58,8 @@ fact "all methods are in classes, all `MethodName`s name a method" {
   all mn: MethodName | some m: Method | m.method_name = mn
 }
 
-fact "all static:: calls are in methods. And (for ease of reading) all other calls are outside methods" {
-  all call: Call | call.receiver = StaticKeyword iff call in Method.calls
+fact "each static:: call is in a single method. And (ease of reading) other calls are outside methods" {
+  all call: Call | call.receiver = StaticKeyword iff one m: Method | call in m.calls
 }
 
 fact "concrete classes cannot contain abstract methods" {
@@ -163,7 +164,7 @@ pred rule_concrete_to_abstract[t1, t2: Type] {
 }
 
 /*
-UNSOUND: including here just for the neat counterexamples if you un-comment its usage abov
+UNSOUND: including here just for the neat counterexamples if you un-comment its usage above
 */
 pred bad_rule_abstract_to_concrete[t1: Type, t2: Type] {
   {
@@ -187,7 +188,7 @@ fact "typing: a LSB method cannot override a non-LSB method" {
     all class: Class | all m: class.methods, overridden: class.parent.methods |
     { m.method_name = overridden.method_name
       m.is_lsb
-    } implies overridden.is_lsb
+    } implies (overridden.is_lsb)
 }
 
 /*
@@ -235,12 +236,44 @@ fun resolve_var_call[v: Var, mn : MethodName]: some Method {
 }
 
 
-// TODO: overly restrictive. Had to hack around recursion limitation. revisit
+/**
+We say that 'static' in method `m` resolves to all of the classes `C` s.t.
+there is a call $receiver::m() that resolves to method `m` in `C`.
+
+Some notes:
+- We model inherited methods as shared between parent and child, so `static` in `static::m()` can resolve
+to multiple classes
+- We cannot represent `multi-hop static` cases like the following, since they would require `resolve_static_keyword` to be
+recursive, which is not legal Alloy:
+
+```
+class A:
+    static function foo():
+      // static resolves to B due to call 1
+      static::bar()        // call 2
+    static function bar():
+      // static resolves to B due to call 2
+      static::bar()        // call 3
+
+class B extends A:
+
+
+A::foo() // call 1
+```
+
+This limitation doesn't matter, since we check the property static_always_resolves_to_a_concrete_class (see below).
+No amount of calling methods on a `static` that points to a concrete class will make it stop pointing to a concrete
+class.
+
+*/
 fun resolve_static_keyword: Method -> some Class {
   {m: Method, classes: m.~methods | 
     some call: Call|
-          call.receiver in Var and
+          { 
+            call.receiver in Var
             resolve_var_call[call.receiver, call.call_method_name] = m
+            classes in call.receiver.resolve_var
+          }
 
   }
 }
@@ -346,37 +379,19 @@ pred show_complicated {
 run  show for 3
 run show_complicated for 4
 
-run {
-  some abs_meth: AbstractMethod |
-  some call: Call |
-    {
-      call.receiver = StaticKeyword
-      call.call_method_name = abs_meth.method_name
-      not call.containing_method.is_lsb
-
-    } 
-} 
-
-run {
-  some class: Class, call: class.methods.calls |
-      {
-        call.receiver in StaticKeyword
-        call.call_method_name in (class.methods & AbstractMethod).method_name
-        call.static_resolve in AbstractMethod
-      }
-} 
-run {
-  some class: AbstractClass, call: class.methods.calls | {
-    call.receiver in StaticKeyword
-  }
-}
-run {
-  some call: Call, disj m1, m2: Method | (m1 + m2) in call.resolve
-}
-
 // -------------check
+pred static_always_resolves_to_a_concrete_class {
+   all m: Method | StaticKeyword in m.calls.receiver implies resolve_static_keyword[m] in ConcreteClass
 
-assert safe {  no c: Call | resolve[c] in AbstractMethod }
-check safe
+}
+assert safe {
+  static_always_resolves_to_a_concrete_class
+  and no c: Call | resolve[c] in AbstractMethod
+}
+
+// To get an interesting counterexample, try commenting out "typing: an LSB method cannot override a non-LSB method"
+check { static_always_resolves_to_a_concrete_class }
+
 check safe for 4
+
 check safe for 5

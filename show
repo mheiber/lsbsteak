@@ -1,8 +1,13 @@
-import os
-from pathlib import Path
+#!/usr/bin/env python3
+USAGE='''
+Usage:
+$THIS_SCRIPT $THE_FILE
 
-with open(Path(os.environ['HOME']) / 'out.txt') as f:
-    text = f.read()
+Where $THE_FILE contains copy-pasted output from Alloy Analyzer text view
+showing a counterexample or instance for hack.als.
+'''
+import sys
+
 
 
 from collections import defaultdict
@@ -42,6 +47,11 @@ def facts_to_code(facts):
             receiver = 'static'
         return (f'{whitespace}{receiver}::{method_name}()     // {call_id} {resolves_to}')
 
+    def call_uses_static(call_id):
+        call = facts['Call'][call_id]
+        receiver = call['receiver'][0]
+        return receiver == 'StaticKeyword$0'
+
     for class_name, class_ in reversed(facts['Class'].items()):
         extends_str = ''
         parent_methods = []
@@ -72,7 +82,8 @@ def facts_to_code(facts):
                     lines.append(f'  static function {method_name}()            // {method_id}')
                     if 'calls' in concrete_method:
                         for call_id in concrete_method['calls']:
-                            lines.append(call_to_line(call_id, '   '))
+                            if call_uses_static(call_id):
+                                lines.append(call_to_line(call_id, '   '))
         lines.append('\n')
     for var_id, var in facts['Var'].items():
         if 'var_ty' in var:
@@ -87,21 +98,29 @@ def facts_to_code(facts):
             points_to = var['var_points_to'][0]
             lines.append(f'{var_id} : {ty_str} = {points_to}')
 
-    for call_id, call in facts['Call'].items():
-        receiver = call['receiver'][0]
-        if receiver == 'StaticKeyword$0':
-            continue
-        lines.append(call_to_line(call_id, ''))
+    for call_id in facts['Call']:
+        if not call_uses_static(call_id):
+            lines.append(call_to_line(call_id, ''))
 
 
     return '\n'.join(lines)
 
 
-def main():
-    facts = parse_facts(text)
+def show_facts(facts_raw_text):
+    facts = parse_facts(facts_raw_text)
     print('\n')
     print(facts_to_code(facts))
     print('\n')
+
+def main():
+    if len(sys.argv) < 2:
+        print(USAGE)
+        exit(1)
+
+    facts_raw_text = ''
+    with open(sys.argv[1]) as f:
+        facts_raw_text = f.read()
+    show_facts(facts_raw_text)
 
 if __name__ == '__main__':
     main()
