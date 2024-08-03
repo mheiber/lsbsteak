@@ -22,7 +22,7 @@ sig AbstractMethod extends Method {}
 sig Call {
    receiver: Receiver,
    call_method_name: MethodName,
-   resolves_to: set Method, // static::foo() may resolve to methods of multiple classes
+   resolves_to: some Method, // static::foo() may resolve to methods of multiple classes
 }
 
 abstract sig Type {
