@@ -125,7 +125,7 @@ fact "typing: aliasing rules" {
 	rule_abstract_covariant[t1, t2]
        or rule_concrete_covariant[t1, t2]
        or rule_concrete_to_abstract[t1, t2]
-      // or bad_rule_abstract_to_concrete[t1, t2] 
+      or bad_rule_abstract_to_concrete[t1, t2] 
   )
 }
 
@@ -180,11 +180,11 @@ fact "typing: can't call abstract or UseStatic methods through AbstractName" {
     )
 }
 
-fact "typing: a UseStatic method can only override parent_method if parent class is concrete or parent_method is use_static " {
+fact "typing: a UseStatic method cannot override a non-UseStatic method " {
     all class: Class | all m: class.methods, overridden: class.parent.methods |
     { m.method_name = overridden.method_name
       m.use_static
-    } implies overridden.use_static or class.parent in ConcreteClass
+    } implies overridden.use_static
 }
 
 /*
