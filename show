@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from dataclasses import dataclass
+from typing import NewType
 USAGE='''
 Usage:
 $THIS_SCRIPT $THE_FILE
@@ -13,6 +15,7 @@ import sys
 from collections import defaultdict
 
 def parse_facts(text):
+    '''Doesn't know about domain-specific facts, completely neutral'''
     facts = defaultdict(dict)
     for line in text.split('\n'):
         if not line.startswith('this/'):
@@ -34,25 +37,98 @@ def parse_facts(text):
 
     return facts
 
+Id = NewType('Id', str)
+
+@dataclass(frozen=True)
+class Chunk:
+    contents: list[str]
+    comes_after_ids: set[Id]
+
+def chunks_to_text(chunks: dict[Id, Chunk]) -> str:
+    '''topo-sort and put lines between multi-line chunks'''
+    taken_ids = set()
+    lines = []
+    while True:
+        has_taken = False
+        for chunk_id, chunk in chunks.items():
+            if chunk_id in taken_ids:
+                continue
+            if chunk.comes_after_ids.issubset(taken_ids):
+                taken_ids.add(chunk_id)
+                lines.extend(chunk.contents)
+                has_taken = True
+        if not has_taken:
+            break
+
+    return '\n'.join(lines)
+
+# domain-specific stuff
+HEADER = '''<?hh
+<<file: __EnableUnstableFeatures('typed_local_variables')>>
+
+'''
+
+def var_id_to_name(var_id: Id) -> str:
+    '''Var$0 becomes $v0'''
+    return '$v' + var_id.split('$')[1]
+
+def class_id_to_name(class_id: Id) -> str:
+    '''AbstractClass$0 becomes AbstractClass0'''
+    return class_id.replace('$', '')
+
+def method_name_id_to_name(method_name_id: Id) -> str:
+    '''MethodName$0 becomes m0'''
+    return method_name_id.replace('MethodName$', 'm')
+
+def receiver_to_name(receiver_id: Id) -> str:
+    if receiver_id == 'StaticKeyword$0':
+        return 'static'
+    else:
+        assert(receiver_id.startswith('Var$'))
+        return var_id_to_name(receiver_id)
 
 def facts_to_code(facts):
-    lines = []
+    chunks: dict[Id, Chunk] = {}
 
-    def call_to_line(call_id, whitespace):
+    def var_to_chunk(var_id) -> Chunk:
+        var = facts['Var'][var_id]
+        var_ty_id = var['var_ty'][0]
+        names_class = facts['Type'][var_ty_id]['names_class'][0]
+        names_class_name = class_id_to_name(names_class)
+        if var_ty_id in facts['AbstractName']:
+            ty_str = f'classname<{names_class_name}>'
+        elif var_ty_id in facts['ConcreteName']:
+            ty_str = f'concrete_classname<{names_class_name}>'
+        else:
+            raise Exception(f'could not find type {var_ty_id}')
+        points_to = var['var_points_to'][0]
+        comes_after_ids = set([points_to])
+        if points_to in facts['Var']:
+            points_to_name = var_id_to_name(points_to)
+        else:
+            points_to_name = class_id_to_name(points_to)
+        var_name = var_id_to_name(var_id)
+        contents =[f'  let {var_name} : {ty_str} = {points_to_name};']
+        return Chunk(contents=contents, comes_after_ids=comes_after_ids)
+
+    def call_to_chunk(call_id, whitespace) -> Chunk:
         call = facts['Call'][call_id]
-        method_name = call['call_method_name'][0]
+        method_name_id = call['call_method_name'][0]
+        method_name = method_name_id_to_name(method_name_id)
         resolves_to = 'resolves to ' + ', '.join(call['resolves_to'])
-        receiver = call['receiver'][0]
+        receiver: Id = call['receiver'][0]
+        receiver_name = receiver_to_name(receiver) 
         if receiver == 'StaticKeyword$0':
-            receiver = 'static'
-        return (f'{whitespace}{receiver}::{method_name}()     // {call_id} {resolves_to}')
+            comes_after_ids: set[Id] = set([])
+        else:
+            comes_after_ids: set[Id] = set([receiver])
+        contents = [f'{whitespace}{receiver_name}::{method_name}();     // {call_id} {resolves_to}']
+        return Chunk(contents = contents, comes_after_ids = comes_after_ids)
 
-    def call_uses_static(call_id):
-        call = facts['Call'][call_id]
-        receiver = call['receiver'][0]
-        return receiver == 'StaticKeyword$0'
-
-    for class_name, class_ in reversed(facts['Class'].items()):
+    def class_to_chunk(class_id) -> Chunk:
+        class_ = facts['Class'][class_id]
+        contents = []
+        comes_after_ids = set([])
         extends_str = ''
         parent_methods = []
         if 'parent' in class_:
@@ -61,50 +137,75 @@ def facts_to_code(facts):
             if 'methods' in parent:
                 parent_methods = parent['methods']
             extends_str = f' extends {parent_id}'
-        if class_name in facts['AbstractClass']:
+            comes_after_ids = set([parent_id])
+        if class_id in facts['AbstractClass']:
             abstract_str = 'abstract '
         else:
             abstract_str = ''
-        lines.append(f'{abstract_str}class {class_name}{extends_str}')
+        class_name = class_id_to_name(class_id)
+        contents.append(f'{abstract_str}class {class_name}{extends_str} {{')
+        if 'methods' not in class_:
+            contents[-1] = contents[-1] + '}'
         if 'methods' in class_:
             for method_id in class_['methods']:
                 if method_id in parent_methods:
                     continue
                 method = facts['Method'][method_id]
-                method_name = method['method_name'][0]
+                method_name_id = method['method_name'][0]
+                method_name = method_name_id_to_name(method_name_id)
                 if method_id in facts['AbstractMethod']:
-                    lines.append(f'  abstract static function {method_name}()   // {method_id}')
+                    contents.append(f'  public static abstract function {method_name}()   // {method_id}')
                 if method_id in facts['ConcreteMethod']:
                     concrete_method = facts['ConcreteMethod'][method_id]
                     attr = 'concrete_class_attribute'
                     if attr in concrete_method:
                         if len(concrete_method[attr]):
-                            lines.append('  <<__ConcreteClass>>')
-                    lines.append(f'  static function {method_name}()            // {method_id}')
+                            contents.append('  <<__ConcreteClass>>')
+                    contents.append(f'  public static function {method_name}()            // {method_id}')
                     if 'calls' in concrete_method:
                         for call_id in concrete_method['calls']:
                             if call_uses_static(call_id):
-                                lines.append(call_to_line(call_id, '   '))
-        lines.append('\n')
-    for var_id, var in facts['Var'].items():
-        if 'var_ty' in var:
-            var_ty_id = var['var_ty'][0]
-            names_class = facts['Type'][var_ty_id]['names_class'][0]
-            if var_ty_id in facts['AbstractName']:
-                ty_str = f'classname<{names_class}>'
-            elif var_ty_id in facts['ConcreteName']:
-                ty_str = f'concrete_classname<{names_class}>'
-            else:
-                raise Exception(f'could not find type {var_ty_id}')
-            points_to = var['var_points_to'][0]
-            lines.append(f'{var_id} : {ty_str} = {points_to}')
+                                for other_contents in call_to_chunk(call_id, '   ').contents:
+                                    contents.append(other_contents)
+            contents.append('}')
+        contents.append('\n')
+        return Chunk(contents = contents, comes_after_ids=comes_after_ids)
+
+
+    def call_uses_static(call_id):
+        call = facts['Call'][call_id]
+        receiver = call['receiver'][0]
+        return receiver == 'StaticKeyword$0'
+
+    for class_id in facts['Class']:
+        chunks[class_id] = class_to_chunk(class_id)
+
+
+    top_comes_after_ids = set(chunks.keys())
+    main_top = Chunk(contents = [
+        '<<__EntryPoint>>',
+        'function main(): void {'
+        ],
+        comes_after_ids=top_comes_after_ids
+    )
+    chunks[Id('main_top')] = main_top
+    for var_id in facts['Var']:
+        chunks[var_id] = var_to_chunk(var_id)
 
     for call_id in facts['Call']:
         if not call_uses_static(call_id):
-            lines.append(call_to_line(call_id, ''))
+            chunks[call_id] = call_to_chunk(call_id, '  ')
 
+    bottom_comes_after_ids = set(chunks.keys())
+    main_bottom = Chunk(contents = [ '', '}' ],
+        comes_after_ids=bottom_comes_after_ids
+    )
+    chunks[Id('main_bottom')] = main_bottom
+    
+    return HEADER + chunks_to_text(chunks)
 
-    return '\n'.join(lines)
+   
+ 
 
 
 def show_facts(facts_raw_text):
