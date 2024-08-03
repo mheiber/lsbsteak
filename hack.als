@@ -22,7 +22,7 @@ sig AbstractMethod extends Method {}
 sig Call {
    receiver: Receiver,
    call_method_name: MethodName,
-   resolves_to: Method,
+   resolves_to: set Method, // static::foo() may resolve to methods of multiple classes
 }
 
 abstract sig Type {
@@ -52,10 +52,13 @@ fact "no class is its own ancestor" {
    no c: Class | c in c.^parent
 }
 
-fact "all methods are in classes, all calls are in methods, all `MethodName`s name a method" {
-  all call: Call | one m: Method | call in m.calls
+fact "all methods are in classes, all `MethodName`s name a method" {
   all m: Method | some c: Class | m in c.methods
   all mn: MethodName | some m: Method | m.method_name = mn
+}
+
+fact "all static:: calls are in methods. And (for ease of reading) all other calls are outside methods" {
+  all call: Call | call.receiver = StaticKeyword iff call in Method.calls
 }
 
 fact "concrete classes cannot contain abstract methods" {
@@ -180,11 +183,11 @@ fact "typing: can't call abstract or UseStatic methods through AbstractName" {
     )
 }
 
-fact "typing: a UseStatic method can only override parent_method if parent class is concrete or parent_method is use_static " {
+fact "typing: a UseStatic method cannot override a non-UseStatic method" {
     all class: Class | all m: class.methods, overridden: class.parent.methods |
     { m.method_name = overridden.method_name
       m.use_static
-    } implies overridden.use_static or class.parent in ConcreteClass
+    } implies overridden.use_static
 }
 
 /*
@@ -211,13 +214,8 @@ fact "C has type ConcreteName<C> when C is a concrete class" {
 }
 
 
-fact "UseStatic attribute only allowed in abstract concrete methods (for simplicity)" {
-  all m: Method |
-     m.use_static implies (containing_class[m] in AbstractClass and m in ConcreteMethod)
-}
-
-fact "all methods in abstract classes that use static must have the UseStatic Attribute" {
-    all m: Method | (containing_class[m] in AbstractClass and StaticKeyword in m.calls.receiver) implies m.use_static
+fact "all methods that use static must have the UseStatic Attribute" {
+    all m: Method | StaticKeyword in m.calls.receiver implies m.use_static
 }
 
 
@@ -237,20 +235,19 @@ fun resolve_var_call[v: Var, mn : MethodName]: some Method {
 }
 
 
+// TODO: overly restrictive. Had to hack around recursion limitation. revisit
 fun resolve_static_keyword: Method -> some Class {
-  {m: Method, c: m.~methods | 
+  {m: Method, classes: m.~methods | 
     some call: Call|
-                resolve_var_call[call.receiver, call.call_method_name] = m
+          call.receiver in Var and
+            resolve_var_call[call.receiver, call.call_method_name] = m
 
   }
-
-  
 }
 
-// TODO: overly restrictive. Had to hack around recursion limitation. revisit
-fun resolve_static_keyword_call[method_containing_static: Method, calleee_name : MethodName]: some Method {
+fun resolve_static_keyword_call[method_containing_static: Method, callee_name : MethodName]: some Method {
           {m: Method |
-          m.method_name = calleee_name
+          m.method_name = callee_name
           and m in resolve_static_keyword[method_containing_static].methods
               
                 }
@@ -372,6 +369,9 @@ run {
   some class: AbstractClass, call: class.methods.calls | {
     call.receiver in StaticKeyword
   }
+}
+run {
+  some call: Call, disj m1, m2: Method | (m1 + m2) in call.resolve
 }
 
 // -------------check

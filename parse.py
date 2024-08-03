@@ -32,6 +32,16 @@ def parse_facts(text):
 
 def facts_to_code(facts):
     lines = []
+
+    def call_to_line(call_id, whitespace):
+        call = facts['Call'][call_id]
+        method_name = call['call_method_name'][0]
+        resolves_to = 'resolves to ' + ', '.join(call['resolves_to'])
+        receiver = call['receiver'][0]
+        if receiver == 'StaticKeyword$0':
+            receiver = 'static'
+        return (f'{whitespace}{receiver}::{method_name}()     // {call_id} {resolves_to}')
+
     for class_name, class_ in reversed(facts['Class'].items()):
         extends_str = ''
         parent_methods = []
@@ -62,13 +72,7 @@ def facts_to_code(facts):
                     lines.append(f'  static function {method_name}()            // {method_id}')
                     if 'calls' in concrete_method:
                         for call_id in concrete_method['calls']:
-                            call = facts['Call'][call_id]
-                            receiver = call['receiver'][0]
-                            if receiver == 'StaticKeyword$0':
-                                receiver = 'static'
-                            method_name = call['call_method_name'][0]
-                            resolves_to = 'resolves to ' + ', '.join(call['resolves_to'])
-                            lines.append(f'    {receiver}::{method_name}()     // {call_id} {resolves_to}')
+                            lines.append(call_to_line(call_id, '   '))
         lines.append('\n')
     for var_id, var in facts['Var'].items():
         if 'var_ty' in var:
@@ -83,6 +87,11 @@ def facts_to_code(facts):
             points_to = var['var_points_to'][0]
             lines.append(f'{var_id} : {ty_str} = {points_to}')
 
+    for call_id, call in facts['Call'].items():
+        receiver = call['receiver'][0]
+        if receiver == 'StaticKeyword$0':
+            continue
+        lines.append(call_to_line(call_id, ''))
 
 
     return '\n'.join(lines)
