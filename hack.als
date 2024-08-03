@@ -16,7 +16,7 @@ sig AbstractClass, ConcreteClass extends Class {}
 
 sig ConcreteMethod extends Method {
   calls: set Call,
-  has_lsb_attribute: lone LSBAttribute, // new attribute
+  concrete_class_attribute: lone ConcreteClassAttribute, // new attribute
 }
 
 sig AbstractMethod extends Method {}
@@ -44,7 +44,7 @@ sig Var extends Receiver {
 
 //-------------new things
 sig AbstractName, ConcreteName extends Type {}
-one sig LSBAttribute {}
+one sig ConcreteClassAttribute {}
 
 
 // --------------- Boring well-formedness conditions
@@ -175,20 +175,27 @@ pred bad_rule_abstract_to_concrete[t1: Type, t2: Type] {
 }
 
 
-fact "typing: can't call abstract or LSB methods through AbstractName" {
+fact "typing: can't call abstract or <<__ConcreteClass>> methods through AbstractName" {
   all call: Call | 
     (call.receiver in Var and call.receiver.var_ty in AbstractName)
     implies (
       static_resolve[call] in ConcreteMethod
-      and not static_resolve[call].is_lsb
+      and not static_resolve[call].has_concrete_class_attr
     )
 }
 
-fact "typing: a LSB method cannot override a non-LSB method" {
+fact typing_concrete_class_overriding {
     all class: Class | all m: class.methods, overridden: class.parent.methods |
     { m.method_name = overridden.method_name
-      m.is_lsb
-    } implies (overridden.is_lsb)
+      m.has_concrete_class_attr
+    } implies (overridden.has_concrete_class_attr)
+}
+
+fact "typing: can only call <<__ConcreteClass>> and abstract methods through StaticKeyword in a <<__ConcreteClass>> method" {
+  all call: Call |
+    let called_meth = static_resolve[call] |
+    (called_meth.has_concrete_class_attr or called_meth in AbstractMethod)
+    and call.receiver = StaticKeyword implies containing_method[call].has_concrete_class_attr
 }
 
 /*
@@ -215,16 +222,10 @@ fact "C has type ConcreteName<C> when C is a concrete class" {
 }
 
 
-fact "all methods that use static must have the LSB Attribute" {
-    all m: Method | StaticKeyword in m.calls.receiver implies m.is_lsb
-}
-
-
-
 // ------------- helpers
 
-pred is_lsb[m: Method] {
-  LSBAttribute in m.has_lsb_attribute
+pred has_concrete_class_attr[m: Method] {
+  ConcreteClassAttribute in m.concrete_class_attribute
 }
 
 fun resolve_var: Var -> Class {
@@ -261,7 +262,8 @@ class B extends A:
 A::foo() // call 1
 ```
 
-This limitation doesn't matter, since we check the property static_always_resolves_to_a_concrete_class (see below).
+This limitation doesn't matter, since we check the property
+`static_always_resolves_to_a_concrete_class_in_concrete_class_methods`
 No amount of calling methods on a `static` that points to a concrete class will make it stop pointing to a concrete
 class.
 
@@ -380,18 +382,21 @@ run  show for 3
 run show_complicated for 4
 
 // -------------check
-pred static_always_resolves_to_a_concrete_class {
-   all m: Method | StaticKeyword in m.calls.receiver implies resolve_static_keyword[m] in ConcreteClass
+
+assert static_always_resolves_to_a_concrete_class_in_concrete_class_methods {
+   all m: Method | m.has_concrete_class_attr implies resolve_static_keyword[m] in ConcreteClass
 
 }
+// If this property doesn't hold, we're only safe by accident
+check static_always_resolves_to_a_concrete_class_in_concrete_class_methods
+
 assert safe {
-  static_always_resolves_to_a_concrete_class
-  and no c: Call | resolve[c] in AbstractMethod
+  no c: Call | resolve[c] in AbstractMethod
 }
 
-// To get an interesting counterexample, try commenting out "typing: an LSB method cannot override a non-LSB method"
-check { static_always_resolves_to_a_concrete_class }
-
+// To get an interesting counterexample,
+// try commenting out typing_concrete_class_overriding
+check safe for 3
 check safe for 4
 
 check safe for 5
