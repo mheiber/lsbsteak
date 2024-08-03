@@ -22,7 +22,7 @@ sig AbstractMethod extends Method {}
 sig Call {
    receiver: Receiver,
    call_method_name: MethodName,
-   resolves_to: Method, // TODO! should remove the lone
+   resolves_to: Method,
 }
 
 abstract sig Type {
@@ -105,8 +105,8 @@ fact "typing: an abstract method cannot override a concrete method " {
     } implies m in ConcreteMethod
 }
 
-// TODO
-fact "typing: method calls are to visible methods. Example: in c.foo() (where c is a name for a class) foo must exist on that class" {
+// Example: in c.foo() (where c is a name for a class) foo must exist on that class"
+fact "typing: method calls are to visible methods" { 
    all call: Call | some m: Method | static_resolve[call] = m
 }
 
@@ -174,7 +174,8 @@ pred rule_abstract_to_concrete[t1: Type, t2: Type] {
 
 fact "typing: can't call abstract methods through AbstractName" {
   all call: Call | 
-    call.receiver.var_ty in AbstractName implies static_resolve[call] in ConcreteMethod
+    (call.receiver in Var and call.receiver.var_ty in AbstractName)
+    implies static_resolve[call] in ConcreteMethod
 }
 
 
@@ -202,20 +203,19 @@ fact "C has type ConcreteName<C> when C is a concrete class" {
 }
 
 
-// TODO
-// fact "UseStatic attribute only allowed in abstract concrete methods (for simplicity)" {
-//   all m: Method |
-//      m.use_static implies (containing_class[m] in AbstractClass and m in ConcreteMethod)
-// }
+fact "UseStatic attribute only allowed in abstract concrete methods (for simplicity)" {
+  all m: Method |
+     m.use_static implies (containing_class[m] in AbstractClass and m in ConcreteMethod)
+}
 
-// fact "all methods in abstract classes that use static must have the UseStatic Attribute" {
-//     all m: Method | (containing_class[m] in AbstractClass and StaticKeyword in m.calls.receiver) implies m.use_static
-// }
+fact "all methods in abstract classes that use static must have the UseStatic Attribute" {
+    all m: Method | (containing_class[m] in AbstractClass and StaticKeyword in m.calls.receiver) implies m.use_static
+}
 
 
-// fact "cannot call UseStatic methods through variables of type AbstractName" {
-//   all call: Call | static_resolve[call].use_static and call.receiver in Var implies call.receiver.var_ty in ConcreteName
-// }
+fact "cannot call UseStatic methods through variables of type AbstractName" {
+  all call: Call | static_resolve[call].use_static and call.receiver in Var implies call.receiver.var_ty in ConcreteName
+}
 
 
 
@@ -229,22 +229,31 @@ fun resolve_var: Var -> Class {
     {v: Var, class: Class | class in v.^var_points_to}
 }
 
+fun resolve_var_call[v: Var, mn : MethodName]: some Method {
+    {m: Method | m.method_name = mn and m in v.resolve_var.methods}
+}
+fun resolve_static_keyword_call[container: Class, mn : MethodName]: some Method {
+          {m: Method |
+              m.method_name = mn and
+              container in m.~methods.*parent 
+          }
+}
+
+
 // c.foo() where c is a name for a class resolves to method foo of c *or a sub-class of c* at runtime
 fun resolve[call: Call]: Method {
-    {m: Method |
-      m.method_name = call.call_method_name and
-      (call.receiver in Var implies
-        m in call.receiver.resolve_var.methods) and
-      (call.receiver in StaticKeyword implies
-        call.containing_class in m.~methods.*parent )
-    }
+    call.receiver in Var implies
+      resolve_var_call[call.receiver, call.call_method_name]
+    else
+      resolve_static_keyword_call[call.containing_class, call.call_method_name]
 }
 
 // c.foo() where c is a name for a class "statically resolves" to method foo of c (in the sense of "static type checking")
 fun static_resolve[call: Call]: Method {
     {m: Method |
-         (m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods)
-     or (StaticKeyword = call.receiver and (
+     (m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods)
+     or       
+      (StaticKeyword = call.receiver and (
               m.method_name = call.call_method_name and
               m in containing_class[call].methods
           ))
@@ -332,24 +341,13 @@ run {
 
     } 
 } 
-/**
-@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-TODO: should be able to have this happen.
-problem is probably with static_resolve or with resolve
 
-abstract class A:
-  abstract abs()
-  <<__UseStatic>>
-  m1():
-    static::abs
-
-*/
 run {
   some class: Class, call: class.methods.calls |
       {
         call.receiver in StaticKeyword
-        // call.call_method_name in (class.methods & AbstractMethod).method_name
-        // call.static_resolve in AbstractMethod
+        call.call_method_name in (class.methods & AbstractMethod).method_name
+        call.static_resolve in AbstractMethod
       }
 } 
 run {
