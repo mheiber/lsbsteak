@@ -66,9 +66,9 @@ def facts_to_code(facts):
                     lines.append(f'  abstract static function {method_name}()   // {method_id}')
                 if method_id in facts['ConcreteMethod']:
                     concrete_method = facts['ConcreteMethod'][method_id]
-                    if 'use_static_attribute' in concrete_method:
-                        if len(concrete_method['use_static_attribute']):
-                            lines.append('  <<__UseStatic>>')
+                    if 'has_lsb_attribute' in concrete_method:
+                        if len(concrete_method['has_lsb_attribute']):
+                            lines.append('  <<__LSB>>')
                     lines.append(f'  static function {method_name}()            // {method_id}')
                     if 'calls' in concrete_method:
                         for call_id in concrete_method['calls']:

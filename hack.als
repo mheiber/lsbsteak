@@ -14,7 +14,7 @@ abstract sig Method {
 
 sig ConcreteMethod extends Method {
   calls: set Call,
-  use_static_attribute: lone UseStaticAttribute, // new attribute
+  has_lsb_attribute: lone LSBAttribute, // new attribute
 }
 
 sig AbstractMethod extends Method {}
@@ -43,7 +43,7 @@ sig Var extends Receiver {
 
 //-------------new things
 sig AbstractName, ConcreteName extends Type {}
-one sig UseStaticAttribute {}
+one sig LSBAttribute {}
 
 
 // --------------- Boring well-formedness conditions
@@ -174,20 +174,20 @@ pred bad_rule_abstract_to_concrete[t1: Type, t2: Type] {
 }
 
 
-fact "typing: can't call abstract or UseStatic methods through AbstractName" {
+fact "typing: can't call abstract or LSB methods through AbstractName" {
   all call: Call | 
     (call.receiver in Var and call.receiver.var_ty in AbstractName)
     implies (
       static_resolve[call] in ConcreteMethod
-      and not static_resolve[call].use_static
+      and not static_resolve[call].is_lsb
     )
 }
 
-fact "typing: a UseStatic method cannot override a non-UseStatic method" {
+fact "typing: a LSB method cannot override a non-LSB method" {
     all class: Class | all m: class.methods, overridden: class.parent.methods |
     { m.method_name = overridden.method_name
-      m.use_static
-    } implies overridden.use_static
+      m.is_lsb
+    } implies overridden.is_lsb
 }
 
 /*
@@ -214,16 +214,16 @@ fact "C has type ConcreteName<C> when C is a concrete class" {
 }
 
 
-fact "all methods that use static must have the UseStatic Attribute" {
-    all m: Method | StaticKeyword in m.calls.receiver implies m.use_static
+fact "all methods that use static must have the LSB Attribute" {
+    all m: Method | StaticKeyword in m.calls.receiver implies m.is_lsb
 }
 
 
 
 // ------------- helpers
 
-pred use_static[m: Method] {
-  UseStaticAttribute in m.use_static_attribute
+pred is_lsb[m: Method] {
+  LSBAttribute in m.has_lsb_attribute
 }
 
 fun resolve_var: Var -> Class {
@@ -352,7 +352,7 @@ run {
     {
       call.receiver = StaticKeyword
       call.call_method_name = abs_meth.method_name
-      not call.containing_method.use_static
+      not call.containing_method.is_lsb
 
     } 
 } 
