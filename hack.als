@@ -1,3 +1,5 @@
+// using custom build of alloy that enables custom visualizations
+//@custom_visualization: ./show ./example.php
 sig MethodName {}
 // We treat __construct as a special static method.
 // Constructors are like static methods from the *caller's* point of view
