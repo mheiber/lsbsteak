@@ -1,5 +1,6 @@
 # Alloy modelling for sound late static bindings
 
+![screnshot](./screenshot.png)
 
 This repo models potential Hack language feautures for sound
 [Late Static Bindings](https://www.php.net/manual/en/language.oop5.late-static-bindings.php).
@@ -9,42 +10,43 @@ Here's an example of a generated Hack program:
 
 ```
 <?hh
+<<file: __EnableUnstableFeatures('typed_local_variables')>>
 
-abstract class C1 {
-  public abstract static function abstractMethod(): void;
+abstract class AbstractClass0 {
+
+  public static abstract function m1(): void /* AbstractMethod$1*/;
+
+  public static function m0(): void /* ConcreteMethod$0*/ {}
 }
 
-abstract class C2 extends C1 {
-  public static function run(): void {
-    static::abstractMethod(); // runtime fatal
+abstract class AbstractClass1 extends AbstractClass0 {
+
+  public static abstract function m1(): void /* AbstractMethod$2*/;
+  // type errors: CantOverrideNonConcreteClassMethodWithConcreteClassMethod
+
+  <<__ConcreteClass>>
+  public static function m0(): void /* ConcreteMethod$1*/ {
+   // Runtime fatal!
+   static::m1();    // Call$0 resolves to AbstractMethod$2
   }
 }
 
 <<__EntryPoint>>
 function main(): void {
-    $cls = C2::class;
-    $cls::run();
+  let $v0 : classname<AbstractClass1> = AbstractClass1::class;
+  let $v1 : classname<AbstractClass0> = $v0;
+  $v1::m0();    // Call$1 resolves to ConcreteMethod$1
+
 }
 ```
 
+which can be easier to digest than [a graph representation](./analyzer.png).
+
+Demo: [./demo.mov](./demo.mov)
+
+<video alt="demo" src="./demo.mov"></video>
 
 
 ## How to Run
 
-Prereqs:
-- Get VSCode
-- [the Alloy VSCode extension](https://marketplace.visualstudio.com/items?itemName=ArashSahebolamri.alloy) (much easier to use than plain Alloy Analyzer).
-- Understand basics of the Alloy language, I found [this reference handy](https://alloy.readthedocs.io/en/latest/language/index.html)
-
-
-Then:
-- Open the hack.als file, and click the little tooltips above 'run' and 'check' commands:
-    - `run` shows examples. If there are no examples found, it means you may have over-constrained: try commenting out facts.
-    - `check` checks that there are no counterexamples. If there is a counterexample, it can be helpful to look at it and see what went wrong
-- A window with Alloy will pop up, you may have to cmd-tab / alt-tab to it.
-- The Viz tab shows a graph representation of the example or counterexample. Generally the examples and counterexample are easier to read as Hack code, though.
-- Switch to the Txt tab in the analyzer
-- copy all the text in the Txt tab
-- paste it into a file and save the file
-- run $REPO_ROOT/show $THE_FILE_NAME to see generated Hack code that is an example or counterexample.
-- In the Alloy window, you can also click "new" to generate more counterexamples or examples
+Use with this custom build of Alloy that understands how to use custom visualizations: [mheiber/org.alloytools.alloy](https://github.com/mheiber/org.alloytools.alloy/). See instructions there, which use the examples from this repo.
