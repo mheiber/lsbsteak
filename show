@@ -19,7 +19,6 @@ Sometimes it can be quite a joy to write unreadable, highly-dynamic code.
 """
 
 
-
 def parse_facts(text):
     """Doesn't know about domain-specific facts, completely neutral"""
     facts = defaultdict(dict)
@@ -58,19 +57,15 @@ class Chunk:
     @staticmethod
     def chunks_to_text(chunks: dict[Id, "Chunk"]) -> str:
         """topo-sort and put lines between multi-line chunks"""
-        taken_ids = set()
+        remaining = set(chunks.keys())
         lines = []
-        while True:
-            has_taken = False
-            for chunk_id, chunk in chunks.items():
-                if chunk_id in taken_ids:
-                    continue
-                if chunk.comes_after_ids.issubset(taken_ids):
-                    taken_ids.add(chunk_id)
+
+        while remaining:
+            for chunk_id in remaining.copy():
+                chunk = chunks[chunk_id]
+                if not chunk.comes_after_ids.intersection(remaining):
+                    remaining.remove(chunk_id)
                     lines.extend(chunk.contents)
-                    has_taken = True
-            if not has_taken:
-                break
 
         return "\n".join(lines)
 
@@ -82,6 +77,14 @@ HEADER = """<?hh
 """
 
 
+def fatal_id_to_name(fatal_id: Id) -> str:
+    return fatal_id.split("$")[0]
+
+
+def tc_error_to_name(tc_error_id: Id) -> str:
+    return tc_error_id.split("$")[0][len("TC") :]
+
+
 def var_id_to_name(var_id: Id) -> str:
     """Var$0 becomes $v0"""
     return "$v" + var_id.split("$")[1]
@@ -90,6 +93,7 @@ def var_id_to_name(var_id: Id) -> str:
 def class_id_to_name(class_id: Id) -> str:
     """AbstractClass$0 becomes AbstractClass0"""
     return class_id.replace("$", "")
+
 
 def method_name_id_to_name(method_name_id: Id) -> str:
     """MethodName$0 becomes m0"""
@@ -107,13 +111,29 @@ def receiver_to_name(receiver_id: Id) -> str:
 def facts_to_code(facts):
     chunks: dict[Id, Chunk] = {}
 
+    def error_comments_for(for_id: str, whitespace) -> list[str]:
+        tc_errors = []
+        has_fatal = False
+        for tc_error_id, tc_err in facts["TypeCheckerError"].items():
+            if for_id in tc_err["tc_error_at"]:
+                tc_errors.append(tc_error_to_name(tc_error_id))
+        for fatal in facts["RuntimeFatal"].values():
+            if for_id in fatal["fatal_at"]:
+                has_fatal = True
+        comments = []
+        if tc_errors:
+            comments.append(whitespace + "// type errors: " + ", ".join(tc_errors))
+        if has_fatal:
+            comments.append(whitespace + "// Runtime fatal!")
+        return comments
+
     def method_name_is__construct(method_name_id: Id) -> bool:
         return method_name_id in facts['__Construct']
 
     def method_is_called_at_least_once(method_id: Id) -> bool:
-        for call in facts['Call'].values():
-            if 'resolves_to' in call:
-                if method_id in call['resolves_to']:
+        for call in facts["Call"].values():
+            if "resolves_to" in call:
+                if method_id in call["resolves_to"]:
                     return True
         return False
 
@@ -133,10 +153,12 @@ def facts_to_code(facts):
         if points_to in facts["Var"]:
             points_to_name = var_id_to_name(points_to)
         else:
-            assert(points_to) in facts['Class']
-            points_to_name = class_id_to_name(points_to) + '::class'
+            assert (points_to) in facts["Class"]
+            points_to_name = class_id_to_name(points_to) + "::class"
         var_name = var_id_to_name(var_id)
-        contents = [f"  let {var_name} : {ty_str} = {points_to_name};"]
+        contents = error_comments_for(var_id, whitespace="  ") + [
+            f"  let {var_name} : {ty_str} = {points_to_name};"
+        ]
         return Chunk(contents=contents, comes_after_ids=comes_after_ids)
 
     def call_to_chunk(call_id, whitespace) -> Chunk:
@@ -150,11 +172,11 @@ def facts_to_code(facts):
         else:
             comes_after_ids: set[Id] = set([receiver])
         if method_name_is__construct(method_name_id):
-            call_expr = f'new {receiver_name}()'
+            call_expr = f"new {receiver_name}()"
         else:
             method_name = method_name_id_to_name(method_name_id)
             call_expr = f"{receiver_name}::{method_name}()"
-        contents = [
+        contents = error_comments_for(call_id, whitespace=whitespace) + [
             f"{whitespace}{call_expr};    // {call_id} {resolves_to}"
         ]
         return Chunk(contents=contents, comes_after_ids=comes_after_ids)
@@ -182,34 +204,30 @@ def facts_to_code(facts):
             contents[-1] = contents[-1] + "}"
         if "methods" in class_:
             for method_id in class_["methods"]:
-                if method_id in parent_methods:
-                    continue
                 method = facts["Method"][method_id]
                 method_name_id = method["method_name"][0]
-                if method_name_is__construct(method_name_id):
-                    is_constructor = True
-                    modifiers = []
-                    method_name = '__construct'
-                    if not method_is_called_at_least_once(method_id):
-                        # Showing all constructors would be noisy because
-                        # all concrete classes have constructors
-                        continue
-                else:
-                    is_constructor = False
-                    modifiers = ['static']
-                    method_name = method_name_id_to_name(method_name_id)
+                if method_id in parent_methods or method_name_is__construct(method_name_id):
+                    # no point in showing constructors, since
+                    # all concrete methods have constructors
+                    # no concrete methods do
+                    #   technically, in our model abstract classes can have abstract constructors
+                    #   for ease of modelling, but we want to generate only valid Hack
+                    continue
+                contents.extend(error_comments_for(method_id, whitespace="  "))
+                modifiers = ["static"]
+                method_name = method_name_id_to_name(method_name_id)
                 contents.append("")
                 if method_id in facts["AbstractMethod"]:
-                    modifiers.append('abstract')
+                    modifiers.append("abstract")
                     contents.append(
                         f"  public {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/;"
                     )
+                attr = "concrete_class_attribute"
+                if attr in method:
+                    if len(method[attr]):
+                        contents.append("  <<__ConcreteClass>>")
                 if method_id in facts["ConcreteMethod"]:
                     concrete_method = facts["ConcreteMethod"][method_id]
-                    attr = "concrete_class_attribute"
-                    if attr in concrete_method and not is_constructor:
-                        if len(concrete_method[attr]):
-                            contents.append("  <<__ConcreteClass>>")
                     contents.append(
                         f"  public {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/ {{"
                     )
@@ -235,16 +253,21 @@ def facts_to_code(facts):
     for class_id in facts["Class"]:
         chunks[class_id] = class_to_chunk(class_id)
 
-    chunks[Id("start of main function")] = Chunk(
+    start_of_main_function_id = Id("start of main function")
+    chunks[start_of_main_function_id] = Chunk(
         contents=["<<__EntryPoint>>", "function main(): void {"],
         comes_after_ids=set(chunks.keys()),
     )
     for var_id in facts["Var"]:
-        chunks[var_id] = var_to_chunk(var_id)
+        chunk = var_to_chunk(var_id)
+        chunk.comes_after_ids.add(start_of_main_function_id)
+        chunks[var_id] = chunk
 
     for call_id in facts["Call"]:
         if not call_uses_static(call_id):
-            chunks[call_id] = call_to_chunk(call_id, "  ")
+            chunk = call_to_chunk(call_id, "  ")
+            chunk.comes_after_ids.update(chunks.keys())
+            chunks[call_id] = chunk
 
     chunks[Id("end of main function")] = Chunk(
         contents=["", "}"], comes_after_ids=set(chunks.keys())
@@ -255,7 +278,7 @@ def facts_to_code(facts):
 
 def facts_to_str(facts_raw_text) -> str:
     facts = parse_facts(facts_raw_text)
-    return facts_to_code(facts) + '\n'
+    return facts_to_code(facts) + "\n"
 
 
 def main():
@@ -263,10 +286,14 @@ def main():
         print(USAGE)
         exit(1)
 
+    # useful for getting a repro
+    # with open('/tmp/out', 'w') as f:
+    #     f.write(' '.join(sys.argv))
+
     facts_raw_text = ""
-    with open(sys.argv[2], 'r') as f:
+    with open(sys.argv[2], "r") as f:
         facts_raw_text = f.read()
-    with open(sys.argv[1], 'w') as f:
+    with open(sys.argv[1], "w") as f:
         f.write(facts_to_str(facts_raw_text))
 
 

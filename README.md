@@ -5,6 +5,7 @@
 This repo models potential Hack language feautures for sound
 [Late Static Bindings](https://www.php.net/manual/en/language.oop5.late-static-bindings.php).
 
+You can ask the Alloy model for examples of valid Hack programs and ask it to check safety properties for you.
 
 Here's an example of a generated Hack program:
 

@@ -56,6 +56,20 @@ sig Var extends Receiver {
    var_points_to: one (Var + Class)
 }
 
+lone sig RuntimeFatal {
+  fatal_at: Call
+}
+
+abstract sig TypeCheckerError {
+   tc_error_at: some (Call + Var + Method)
+}
+lone sig TCMethodNotVisible,
+  TCSubtypingError,
+  TCCantCallAbstractMethodThroughClassName,
+  TCCantCallConcreteClassMethodThroughClassName,
+  TCCantOverrideNonConcreteClassMethodWithConcreteClassMethod,
+  TCCanOnlyUseStaticAsConcreteInConcreteClassMethods
+extends TypeCheckerError {}
 
 //-------------new things
 sig ClassName, ConcreteClassName extends Type {}
@@ -91,7 +105,7 @@ fact "concrete classes must have implementations for all methods" {
 
 fact "a class must have all the method names of its parent" {
    all class: Class |
-    (class.parent.methods.method_name)
+    (class.parent.methods.method_name - __Construct)
     in class.methods.method_name
 }
 
@@ -116,7 +130,10 @@ fact "method names are unique in a class" {
 fact "dynamic method resolution" {
   all call: Call | call.resolves_to = resolve[call]
 }
- 
+
+fact fatals { 
+  all c: Call | resolve[c] in AbstractMethod iff c in RuntimeFatal.fatal_at
+}
 
 // --------------- Pre-existing type-checking
 
@@ -135,13 +152,17 @@ fact "typing: an abstract method cannot override a concrete method UNLESS it's a
 
 // Example: in c.foo() (where c is a name for a class) foo must exist on that class"
 fact "typing: method calls are to visible methods" { 
-   all call: Call | some m: Method | static_resolve[call] = m
+  TCMethodNotVisible.tc_error_at = 
+   {call: Call | no static_resolve[call] }
 }
 
 fact "typing: variable aliasing reflects subtyping" {
   // var lower: subtype = .....
   // var upper: supertype = lower
-  all upper, lower: Var | lower in upper.var_points_to implies upper.var_ty in lower.var_ty.supertypes
+  TCSubtypingError.tc_error_at =
+  { lhs: Var | some rhs: Var & lhs.var_points_to |
+    lhs.var_ty not in rhs.var_ty.supertypes
+  }
 }
 
 
@@ -198,21 +219,35 @@ pred bad_rule_abstract_to_concrete[t1: Type, t2: Type] {
   }
 }
 
+fact "typing: can't call <<__ConcreteClass>> methods through ClassName" {
+  TCCantCallConcreteClassMethodThroughClassName.tc_error_at =
+  {call: Call |  {
+      call.receiver in Var
+      call.receiver.var_ty in ClassName
+      call.static_resolve.has_concrete_class_attr
+    }
+  }
+}
 
-fact "typing: can't call abstract or <<__ConcreteClass>> methods through ClassName" {
-  all call: Call | 
-    (call.receiver in Var and call.receiver.var_ty in ClassName)
-    implies (
-      static_resolve[call] in ConcreteMethod
-      and not static_resolve[call].has_concrete_class_attr
-    )
+fact "typing: can't call abstract methods through ClassName" {
+  TCCantCallAbstractMethodThroughClassName.tc_error_at =
+  {call: Call |  {
+      call.receiver in Var
+      call.receiver.var_ty in ClassName
+      call.static_resolve in AbstractMethod
+    }
+  }
 }
 
 fact typing_concrete_class_overriding {
-    all class: Class | all m: class.methods, overridden: class.parent.methods |
+  TCCantOverrideNonConcreteClassMethodWithConcreteClassMethod.tc_error_at =
+  { m: Method | some overridden: m.~methods.parent.methods |
     { m.method_name = overridden.method_name
       m.has_concrete_class_attr
-    } implies (overridden.has_concrete_class_attr)
+      not overridden.has_concrete_class_attr
+    }
+
+  }
 }
 
 // This subsumes the existing rules in Hack on where a constructor can be called from
@@ -221,10 +256,15 @@ fact "typing: Constructors implicitly have the <<__ConcreteClass>> attribute" {
 }
 
 fact "typing: can only call <<__ConcreteClass>> and abstract methods through StaticKeyword in a <<__ConcreteClass>> method" {
-  all call: Call |
-    let called_meth = static_resolve[call] |
-    (called_meth.has_concrete_class_attr or called_meth in AbstractMethod)
-    and call.receiver = StaticKeyword implies containing_method[call].has_concrete_class_attr
+  TCCanOnlyUseStaticAsConcreteInConcreteClassMethods.tc_error_at = {
+    call: Call | 
+    let called_method = static_resolve[call] |
+    {
+      call.receiver = StaticKeyword
+      (called_method.has_concrete_class_attr or called_method in AbstractMethod)
+      not call.containing_method.has_concrete_class_attr
+    }
+  }
 }
 
 /*
@@ -404,11 +444,13 @@ pred has_override {
         m.method_name in c2.methods.method_name
     }
 }
-//---------------show
+//---------------see examples
 
 pred show { 
   // at least 1 method is abstract
-  some am: AbstractMethod | am in univ
+  some AbstractMethod 
+  and no TCSubtypingError
+  and __Construct in Call.call_method_name
 }
 
 pred show_complicated {
@@ -417,29 +459,98 @@ pred show_complicated {
   has_override
 }
 
-run {
-  some AbstractMethod & __Construct.~method_name
+pred demo_tc_error[tc_error: TypeCheckerError] {
+  one tc_error
+  no (TypeCheckerError - tc_error)
+  one RuntimeFatal
 }
 
-run  show for 3
+run  show for 4
 run show_complicated for 4
+
+/*
+// important kind of example: variations of the following
+class Parent: 
+    static function m(): void {}
+
+abstract class Child extends Parent:
+    abstract static function abs: void {}
+    <<__ConcreteClassName>>
+    static function m: void {}
+        static::abs; // 
+    }
+
+let $cls0 = Child::class; 
+let $cls: classname<Parent> = $cls0;
+$cls::m();
+*/
+run {
+  some child: Class + Var
+  , m: child.methods
+  , abs: child.methods & AbstractMethod
+  , static_call: m.calls
+  , call_to_child: Call
+  , overridden:  child.parent.methods
+  |
+  { 
+    some disj v1, v2: Var | Var = v1  + v2
+    Call = static_call + call_to_child
+    Class = child + child.parent
+    m.method_name = overridden.method_name
+    m.method_name not in __Construct
+    static_call.receiver = StaticKeyword
+    static_call.call_method_name = abs.method_name
+    call_to_child.receiver.var_ty.names_class = child.parent
+    call_to_child.resolve = m
+    one RuntimeFatal
+    // try commenting/uncommenting different typing rules below
+    // to see how they participate in the example
+    no (
+        TypeCheckerError
+      - TCCantOverrideNonConcreteClassMethodWithConcreteClassMethod
+      // - TCSubtypingError
+      // - TCCantCallConcreteClassMethodThroughClassName
+      // - TCCanOnlyUseStaticAsConcreteInConcreteClassMethods
+    )
+  }
+} for 5
+
+// see what each error does
+run { demo_tc_error[ TCSubtypingError] } for 4
+run { demo_tc_error[
+  TCCantCallAbstractMethodThroughClassName
+]} for 4
+run { demo_tc_error[
+  TCCantCallConcreteClassMethodThroughClassName
+]} for 4
+run { demo_tc_error[
+  TCCantOverrideNonConcreteClassMethodWithConcreteClassMethod
+]} for 4
+run { demo_tc_error[
+  TCCanOnlyUseStaticAsConcreteInConcreteClassMethods
+]} for 4
+
 
 // -------------check
 
 assert static_always_resolves_to_a_concrete_class_in_concrete_class_methods {
-   all m: Method | m.has_concrete_class_attr implies resolve_static_keyword[m] in ConcreteClass
+   all m: Method |
+   m.has_concrete_class_attr implies
+      (resolve_static_keyword[m] in ConcreteClass
+   or some TypeCheckerError.tc_error_at)
 
 }
+  
 // If this property doesn't hold, we're only safe by accident
 check static_always_resolves_to_a_concrete_class_in_concrete_class_methods
 
 assert safe {
-  no c: Call | resolve[c] in AbstractMethod
+  some RuntimeFatal implies some TypeCheckerError
 }
 
-// To get an interesting counterexample,
-// try commenting out typing_concrete_class_overriding
-check safe for 3
+// takes ~50ms, checks for max 3 of each signature
+check safe
+// takes ~35 seconds
 check safe for 4
-
+// I haven't been patient enough to wait for this
 check safe for 5
