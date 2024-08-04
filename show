@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import NewType
 
 USAGE = """
 Usage:
-$THIS_SCRIPT $THE_FILE
+$THIS_SCRIPT $OUTPUT_FILE $THE_FACTS_FILE 
 
-Where $THE_FILE contains copy-pasted output from Alloy Analyzer text view
-showing a counterexample or instance for hack.als.
+Where:
+- $THE_FACTS_FILE contains output from Alloy Analyzer text view
+- $OUTPUT_FILE is where to write the generated Hack example
 """
 import sys
 
@@ -16,7 +18,6 @@ import sys
 Sometimes it can be quite a joy to write unreadable, highly-dynamic code.
 """
 
-from collections import defaultdict
 
 
 def parse_facts(text):
@@ -30,7 +31,8 @@ def parse_facts(text):
         if "<:" not in lhs:
             sig = lhs
             for name in rhs:
-                facts[sig][name] = {}
+                if name:
+                    facts[sig][name] = {}
         else:
             sig, prop = lhs.split("<:")
             for mapping in rhs:
@@ -110,8 +112,9 @@ def facts_to_code(facts):
 
     def method_is_called_at_least_once(method_id: Id) -> bool:
         for call in facts['Call'].values():
-            if method_id in call['resolves_to']:
-                return True
+            if 'resolves_to' in call:
+                if method_id in call['resolves_to']:
+                    return True
         return False
 
     def var_to_chunk(var_id) -> Chunk:
@@ -250,21 +253,24 @@ def facts_to_code(facts):
     return HEADER + Chunk.chunks_to_text(chunks)
 
 
-def show_facts(facts_raw_text):
+def facts_to_str(facts_raw_text) -> str:
     facts = parse_facts(facts_raw_text)
-    print(facts_to_code(facts))
-    print("\n")
+    return facts_to_code(facts) + '\n'
 
 
 def main():
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         print(USAGE)
         exit(1)
 
+    with open('/tmp/out', 'w') as f:
+        f.write(str(sys.argv))
+
     facts_raw_text = ""
-    with open(sys.argv[1]) as f:
+    with open(sys.argv[2], 'r') as f:
         facts_raw_text = f.read()
-    show_facts(facts_raw_text)
+    with open(sys.argv[1], 'w') as f:
+        f.write(facts_to_str(facts_raw_text))
 
 
 if __name__ == "__main__":
