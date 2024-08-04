@@ -89,7 +89,6 @@ def class_id_to_name(class_id: Id) -> str:
     """AbstractClass$0 becomes AbstractClass0"""
     return class_id.replace("$", "")
 
-
 def method_name_id_to_name(method_name_id: Id) -> str:
     """MethodName$0 becomes m0"""
     return method_name_id.replace("MethodName$", "m")
@@ -105,6 +104,15 @@ def receiver_to_name(receiver_id: Id) -> str:
 
 def facts_to_code(facts):
     chunks: dict[Id, Chunk] = {}
+
+    def method_name_is__construct(method_name_id: Id) -> bool:
+        return method_name_id in facts['__Construct']
+
+    def method_is_called_at_least_once(method_id: Id) -> bool:
+        for call in facts['Call'].values():
+            if method_id in call['resolves_to']:
+                return True
+        return False
 
     def var_to_chunk(var_id) -> Chunk:
         var = facts["Var"][var_id]
@@ -131,7 +139,6 @@ def facts_to_code(facts):
     def call_to_chunk(call_id, whitespace) -> Chunk:
         call = facts["Call"][call_id]
         method_name_id = call["call_method_name"][0]
-        method_name = method_name_id_to_name(method_name_id)
         resolves_to = "resolves to " + ", ".join(call["resolves_to"])
         receiver: Id = call["receiver"][0]
         receiver_name = receiver_to_name(receiver)
@@ -139,8 +146,13 @@ def facts_to_code(facts):
             comes_after_ids: set[Id] = set([])
         else:
             comes_after_ids: set[Id] = set([receiver])
+        if method_name_is__construct(method_name_id):
+            call_expr = f'new {receiver_name}()'
+        else:
+            method_name = method_name_id_to_name(method_name_id)
+            call_expr = f"{receiver_name}::{method_name}()"
         contents = [
-            f"{whitespace}{receiver_name}::{method_name}();     // {call_id} {resolves_to}"
+            f"{whitespace}{call_expr};    // {call_id} {resolves_to}"
         ]
         return Chunk(contents=contents, comes_after_ids=comes_after_ids)
 
@@ -169,22 +181,34 @@ def facts_to_code(facts):
             for method_id in class_["methods"]:
                 if method_id in parent_methods:
                     continue
-                contents.append("")
                 method = facts["Method"][method_id]
                 method_name_id = method["method_name"][0]
-                method_name = method_name_id_to_name(method_name_id)
+                if method_name_is__construct(method_name_id):
+                    is_constructor = True
+                    modifiers = []
+                    method_name = '__construct'
+                    if not method_is_called_at_least_once(method_id):
+                        # Showing all constructors would be noisy because
+                        # all concrete classes have constructors
+                        continue
+                else:
+                    is_constructor = False
+                    modifiers = ['static']
+                    method_name = method_name_id_to_name(method_name_id)
+                contents.append("")
                 if method_id in facts["AbstractMethod"]:
+                    modifiers.append('abstract')
                     contents.append(
-                        f"  public static abstract function {method_name}(): void /* {method_id}*/;"
+                        f"  public {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/;"
                     )
                 if method_id in facts["ConcreteMethod"]:
                     concrete_method = facts["ConcreteMethod"][method_id]
                     attr = "concrete_class_attribute"
-                    if attr in concrete_method:
+                    if attr in concrete_method and not is_constructor:
                         if len(concrete_method[attr]):
                             contents.append("  <<__ConcreteClass>>")
                     contents.append(
-                        f"  public static function {method_name}(): void /* {method_id}*/ {{"
+                        f"  public {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/ {{"
                     )
                     if "calls" not in concrete_method:
                         contents[-1] = contents[-1] + "}"

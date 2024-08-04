@@ -1,7 +1,12 @@
 sig MethodName {}
+// We treat __construct as a special static method.
+// Constructors are like static methods from the *caller's* point of view
+// since they are callable things defined on the class that don't require an instance
+one sig __Construct in MethodName {}
 
 abstract sig Method {
-  method_name: one MethodName
+  method_name: one MethodName,
+  concrete_class_attribute: lone ConcreteClassAttribute, // new attribute `<<__ConcreteClass>>`
 }
 
 // On the representation of methods of a class:
@@ -15,9 +20,9 @@ abstract sig Class {
 sig AbstractClass, ConcreteClass extends Class {}
 
 sig ConcreteMethod extends Method {
-  calls: set Call,
-  concrete_class_attribute: lone ConcreteClassAttribute, // new attribute
+  calls: set Call
 }
+
 
 sig AbstractMethod extends Method {}
 
@@ -36,6 +41,14 @@ abstract sig Receiver {}
 
 one sig StaticKeyword extends Receiver {}
 
+
+/**
+We are not modeling C::foo() directly, but you can see from 
+the proposal that C::foo() is treated the same way as `(C::class)::foo()`.
+
+We are not modeling `$cls = static::class;` and instead are only modeling
+direct `static::foo()` calls. I suspect nothing hinges on this choice
+*/
 sig Var extends Receiver {
    var_ty: Type,
    var_points_to: one (Var + Class)
@@ -47,7 +60,7 @@ sig ClassName, ConcreteClassName extends Type {}
 one sig ConcreteClassAttribute {}
 
 
-// --------------- Boring well-formedness conditions
+// --------------- pre-existing well-formedness conditions
 
 fact "no class is its own ancestor" {
    no c: Class | c in c.^parent
@@ -56,6 +69,10 @@ fact "no class is its own ancestor" {
 fact "all methods are in classes, all `MethodName`s name a method" {
   all m: Method | some c: Class | m in c.methods
   all mn: MethodName | some m: Method | m.method_name = mn
+}
+
+fact "all concrete classes have concrete constructors, no abstract classes have concrete constructors" {
+  all c: Class | __Construct in (c.methods & ConcreteMethod).method_name iff c in ConcreteClass
 }
 
 fact "each static:: call is in a single method. And (ease of reading) other calls are outside methods" {
@@ -72,7 +89,7 @@ fact "concrete classes must have implementations for all methods" {
 
 fact "a class must have all the method names of its parent" {
    all class: Class |
-    class.parent.methods.method_name
+    (class.parent.methods.method_name)
     in class.methods.method_name
 }
 
@@ -92,7 +109,6 @@ fact "method names are unique in a class" {
   disj[m1.method_name, m2.method_name]
 }
 
-
 // ---------------Runtime semantics
 
 fact "dynamic method resolution" {
@@ -100,11 +116,17 @@ fact "dynamic method resolution" {
 }
  
 
-// --------------- Pre-existing, obvious type-checking
+// --------------- Pre-existing type-checking
 
-fact "typing: an abstract method cannot override a concrete method " {
+// Why is it not allowed to override a concrete method with an abstract method
+// *unless* the abstract method happens to be a constructor? My understanding is now that
+// constructors are inherently <<__ConcreteClass>>: we only allow constructing concrete classes.
+// Aside:
+// > This suggests an interesting alternative inheritance check that would also be sound while being more expressive:
+//    "An abstract method cannot override a concrete method unless it is (<<__ConcreteClass>> or a constructor)."
+fact "typing: an abstract method cannot override a concrete method UNLESS it's a constructor" {
     all class: Class | all m: class.methods, overridden: class.parent.methods |
-    { m.method_name = overridden.method_name
+    { m.method_name in overridden.method_name - __Construct // constructors are exempt
       overridden in ConcreteMethod
     } implies m in ConcreteMethod
 }
@@ -189,6 +211,11 @@ fact typing_concrete_class_overriding {
     { m.method_name = overridden.method_name
       m.has_concrete_class_attr
     } implies (overridden.has_concrete_class_attr)
+}
+
+// This subsumes the existing rules in Hack on where a constructor can be called from
+fact "typing: Constructors implicitly have the <<__ConcreteClass>> attribute" {
+  all m: Method | m.method_name = __Construct implies m.has_concrete_class_attr
 }
 
 fact "typing: can only call <<__ConcreteClass>> and abstract methods through StaticKeyword in a <<__ConcreteClass>> method" {
@@ -332,6 +359,16 @@ pred inherits_from[descendent: Type, ancestor: Type] {
 }
 
 
+// --------------misc
+
+// This simplification doesn't weaken our conclusions because once code has entered
+// a constructor we know that the current runtime class is concrete: no more interesting
+// interaction with names for classes or `abstract`. The simplification enables 
+fact "consider only empty constructors (for simplicity)" {
+  all m: Method | m.method_name = __Construct implies no m.calls
+}
+
+
 // ------------- pretty
 
 fact "non-essential eta rule for ClassName that makes visualizations easier to read" {
@@ -376,6 +413,10 @@ pred show_complicated {
   has_inherited_method
   has_interesting_method_call
   has_override
+}
+
+run {
+  some AbstractMethod & __Construct.~method_name
 }
 
 run  show for 3
