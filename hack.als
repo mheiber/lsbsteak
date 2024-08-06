@@ -552,5 +552,6 @@ assert safe {
 check safe
 // takes ~35 seconds
 check safe for 4
-// I haven't been patient enough to wait for this
-check safe for 5
+// In Alloy options, I recommend selecting Glucose solver,
+// then this runs in ~8 minutes on a Mac pro
+check safe for 5 but 2 Call
