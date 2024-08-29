@@ -13,7 +13,7 @@ abstract sig Method {
 
 // On the representation of methods of a class:
 // - "inheritance" is when two classes share a method
-// - "overriding" is when subclass has a class with the same name as the name of a class in the parent
+// - "overriding" is when subclass has a meth with the same name as the name of a meth in the parent
 abstract sig Class {
    methods: set Method,
    parent: lone Class
@@ -71,12 +71,9 @@ lone sig TCMethodNotVisible,
   TCCanOnlyUseStaticAsConcreteInConcreteClassMethods
 extends TypeCheckerError {}
 
-//-------------new things
 sig ClassName, ConcreteClassName extends Type {}
 one sig ConcreteClassAttribute {}
 
-
-// --------------- pre-existing well-formedness conditions
 
 fact "no class is its own ancestor" {
    no c: Class | c in c.^parent
@@ -359,7 +356,7 @@ fun resolve_static_keyword_call[method_containing_static: Method, callee_name : 
 }
 
 
-// c.foo() where c is a name for a class resolves to method foo of c *or a sub-class of c* at runtime
+// $c::foo() where c is a name for a class resolves to method foo of c *or a sub-class of c* at runtime
 fun resolve[call: Call]: Method {
     call.receiver in Var implies
       resolve_var_call[call.receiver, call.call_method_name]
@@ -367,7 +364,7 @@ fun resolve[call: Call]: Method {
       resolve_static_keyword_call[call.containing_method, call.call_method_name]
 }
 
-// c.foo() where c is a name for a class "statically resolves" to method foo of c (in the sense of "static type checking")
+// $c::foo() where c is a name for a class "statically resolves" to method foo of c (in the sense of "static type checking")
 fun static_resolve[call: Call]: Method {
     {m: Method |
      (m.method_name = call.call_method_name and m in call.receiver.var_ty.names_class.methods)
