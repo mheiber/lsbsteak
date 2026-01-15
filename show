@@ -214,13 +214,19 @@ def facts_to_code(facts):
                     #   for ease of modelling, but we want to generate only valid Hack
                     continue
                 contents.extend(error_comments_for(method_id, whitespace="  "))
-                modifiers = ["static"]
+                modifiers = []
+                visibility = "public"
+                if method.get("is_private"):
+                    visibility = "private"
+                if method.get("is_final"):
+                    modifiers.append("final")
+                modifiers.append("static")
                 method_name = method_name_id_to_name(method_name_id)
                 contents.append("")
                 if method_id in facts["AbstractMethod"]:
                     modifiers.append("abstract")
                     contents.append(
-                        f"  public {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/;"
+                        f"  {visibility} {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/;"
                     )
                 attr = "concrete_class_attribute"
                 if attr in method:
@@ -229,7 +235,7 @@ def facts_to_code(facts):
                 if method_id in facts["ConcreteMethod"]:
                     concrete_method = facts["ConcreteMethod"][method_id]
                     contents.append(
-                        f"  public {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/ {{"
+                        f"  {visibility} {' '.join(modifiers)} function {method_name}(): void /* {method_id}*/ {{"
                     )
                     if "calls" not in concrete_method:
                         contents[-1] = contents[-1] + "}"

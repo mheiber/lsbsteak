@@ -6,9 +6,14 @@ sig MethodName {}
 // since they are callable things defined on the class that don't require an instance
 one sig __Construct in MethodName {}
 
+one sig Final {} // marker for final methods
+one sig Private {} // marker for private methods
+
 abstract sig Method {
   method_name: one MethodName,
   concrete_class_attribute: lone ConcreteClassAttribute, // new attribute `<<__ConcreteClass>>`
+  is_final: lone Final,
+  is_private: lone Private
 }
 
 // On the representation of methods of a class:
@@ -68,7 +73,8 @@ lone sig TCMethodNotVisible,
   TCCantCallAbstractMethodThroughClassName,
   TCCantCallConcreteClassMethodThroughClassName,
   TCCantOverrideNonConcreteClassMethodWithConcreteClassMethod,
-  TCCanOnlyUseStaticAsConcreteInConcreteClassMethods
+  TCCanOnlyUseStaticAsConcreteInConcreteClassMethods,
+  TCFinalMethodOverridden
 extends TypeCheckerError {}
 
 sig ClassName, ConcreteClassName extends Type {}
@@ -145,6 +151,15 @@ fact "typing: an abstract method cannot override a concrete method UNLESS it's a
     { m.method_name in overridden.method_name - __Construct // constructors are exempt
       overridden in ConcreteMethod
     } implies m in ConcreteMethod
+}
+
+fact "typing: a final method cannot be overridden" {
+  TCFinalMethodOverridden.tc_error_at =
+  { m: Method | some overridden: m.~methods.parent.methods |
+    { m.method_name = overridden.method_name
+      Final in overridden.is_final
+    }
+  }
 }
 
 // Example: in c.foo() (where c is a name for a class) foo must exist on that class"
