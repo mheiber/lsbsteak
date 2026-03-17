@@ -28,11 +28,16 @@ abbrev «public static function» (_name : String := "") : Method :=
 abbrev «<<__ConcreteClass>> public static function» (_name : String := "") : Method :=
   { kind := MethodKind.concrete, hasConcreteClassAttr := true, isFinal := false }
 
-/-- `public function __construct() { }` (concrete constructor) -/
+/-- `public function __construct() { }` (concrete constructor)
+    Constructors always have hasConcreteClassAttr because constructing a class
+    inherently requires a concrete class — see hack.als line 280-282:
+    "Constructors implicitly have the <<__ConcreteClass>> attribute" -/
 abbrev «public function __construct» : Method :=
   { kind := MethodKind.concrete, hasConcreteClassAttr := true, isFinal := false }
 
-/-- Implicit abstract constructor (for abstract classes without explicit constructor) -/
+/-- Implicit abstract constructor (for abstract classes without explicit constructor).
+    hasConcreteClassAttr is true for the same reason as above — constructors are
+    inherently <<__ConcreteClass>> regardless of whether they are abstract or concrete. -/
 abbrev «(no concrete __construct)» : Method :=
   { kind := MethodKind.abstract_, hasConcreteClassAttr := true, isFinal := false }
 
@@ -143,7 +148,8 @@ end Counterexample.AbstractThroughClassname
 -- }
 --
 -- $cls = C2::class;           // $cls: concrete_classname<C2>
--- $cls::__construct();         // RUNTIME ERROR: abstract constructor
+-- new $cls();                  // RUNTIME ERROR: abstract constructor
+-- // (modeled as $cls::__construct() in the Alloy/Lean model)
 -- ============================================================
 
 namespace Counterexample.AbstractFinalConsistentConstruct
