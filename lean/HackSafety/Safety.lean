@@ -131,7 +131,12 @@ structure WellFormedWorld where
     vc.resolvesTo ∈ vc.pointsToClass.methods
 
   /-- Static resolve agrees with runtime resolve in method kind for var calls.
-      This follows from the Alloy model where both look up methods by the same name. -/
+      This is stronger than strictly needed: we only need the direction
+      "resolvesTo.kind = abstract_ → staticResolvesTo.kind = abstract_".
+      That direction is guaranteed by the Alloy fact (hack.als line 163-168):
+      "an abstract method cannot override a concrete method" — so if the
+      runtime-resolved method is abstract, the statically-resolved method
+      (in an ancestor class) must also be abstract. -/
   var_static_resolves_matches :
     ∀ call ∈ calls, ∀ vc, call = Call.varCall vc →
     vc.staticResolvesTo.kind = vc.resolvesTo.kind
@@ -179,7 +184,13 @@ structure WellFormedWorld where
   /-- assert static_always_resolves_to_a_concrete_class_in_concrete_class_methods
       (hack.als line 581-587)
       When the containing method is effectively ConcreteClass,
-      static resolves to a concrete class. -/
+      static resolves to a concrete class.
+
+      NOTE: In the Alloy model this is an *assertion* (checked by the solver),
+      not a fact. It is a consequence of the typing rules — in particular,
+      ConcreteClassName only names concrete classes, and the subtyping rules
+      prevent ClassName from flowing into ConcreteClassName positions.
+      We take it as an axiom here, justified by the Alloy solver's verification. -/
   static_resolves_to_concrete :
     ∀ call ∈ calls, ∀ sc, call = Call.staticCall sc →
     sc.containingMethod.effectivelyConcreteClass sc.containingClass →
@@ -197,7 +208,8 @@ structure WellFormedWorld where
      sc.staticResolvesTo.kind = MethodKind.abstract_) →
     sc.containingMethod.effectivelyConcreteClass sc.containingClass
 
-  /-- Static resolve agrees with runtime resolve in method kind for static calls. -/
+  /-- Static resolve agrees with runtime resolve in method kind for static calls.
+      Same justification as `var_static_resolves_matches` above. -/
   static_static_resolves_matches :
     ∀ call ∈ calls, ∀ sc, call = Call.staticCall sc →
     sc.staticResolvesTo.kind = sc.resolvesTo.kind
