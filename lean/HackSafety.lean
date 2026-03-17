@@ -3,3 +3,4 @@
 import HackSafety.Basic
 import HackSafety.Safety
 import HackSafety.Counterexamples
+import HackSafety.HackNotation
