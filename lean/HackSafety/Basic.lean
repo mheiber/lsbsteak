@@ -1,1 +1,2 @@
-def hello := "world"
+-- Placeholder module for HackSafety library basics.
+-- The main content is in Safety.lean, Counterexamples.lean, and HackNotation.lean.
