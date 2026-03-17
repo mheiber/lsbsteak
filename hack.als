@@ -70,7 +70,7 @@ lone sig RuntimeFatal {
 }
 
 abstract sig TypeCheckerError {
-   tc_error_at: some (Call + Var + Method)
+   tc_error_at: some (Call + Var + Method + Class)
 }
 lone sig TCMethodNotVisible,
   TCSubtypingError,
@@ -78,7 +78,8 @@ lone sig TCMethodNotVisible,
   TCCantCallConcreteClassMethodThroughClassName,
   TCCantOverrideNonConcreteClassMethodWithConcreteClassMethod,
   TCCanOnlyUseStaticAsConcreteInConcreteClassMethods,
-  TCFinalMethodOverridden
+  TCFinalMethodOverridden,
+  TCAbstractFinalCantInheritConsistentConstruct
 extends TypeCheckerError {}
 
 sig ClassName, ConcreteClassName extends Type {}
@@ -289,6 +290,15 @@ fact "typing: can only call <<__ConcreteClass>> and abstract methods through Sta
       (called_method.effectively_concrete_class or called_method in AbstractMethod)  // use new predicate
       not call.containing_method.effectively_concrete_class  // use new predicate
     }
+  }
+}
+
+fact "typing: abstract final classes cannot inherit __ConsistentConstruct" {
+  TCAbstractFinalCantInheritConsistentConstruct.tc_error_at =
+  { c: Class |
+    c in AbstractClass
+    and ClassFinal in c.is_class_final
+    and ConsistentConstructAttr in c.consistent_construct
   }
 }
 
