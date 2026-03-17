@@ -288,9 +288,6 @@ fact "typing: can only call <<__ConcreteClass>> and abstract methods through Sta
       call.receiver = StaticKeyword
       (called_method.effectively_concrete_class or called_method in AbstractMethod)  // use new predicate
       not call.containing_method.effectively_concrete_class  // use new predicate
-      // __ConsistentConstruct allows calling new static() (= static::__Construct())
-      not (called_method.method_name = __Construct
-           and ConsistentConstructAttr in call.containing_method.containing_class.consistent_construct)
     }
   }
 }
@@ -301,10 +298,13 @@ C         C is a concrete class
 C: ConcreteClassName<C>
 
 */
-fact "C has type ConcreteClassName<C> when C is a concrete class" {
+fact "C has type ConcreteClassName<C> when C is a concrete class (treating abstract final CC as concrete)" {
    all v: Var | all class: Class |
    (v.var_points_to = class and v.var_ty in ConcreteClassName) implies
-   (class in ConcreteClass and v.var_ty.names_class = class)
+   ((class in ConcreteClass
+     or (class in AbstractClass and ClassFinal in class.is_class_final
+         and ConsistentConstructAttr in class.consistent_construct))
+    and v.var_ty.names_class = class)
 }
 
 /*
