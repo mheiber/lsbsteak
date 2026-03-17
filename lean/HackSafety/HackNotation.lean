@@ -1,184 +1,132 @@
 /-
-  Hack-like notation for building Lean counterexamples.
+  Hack-like notation and counterexamples for the safety proof.
 
-  Goal: make counterexamples read like Hack source code,
+  Uses Lean notation to make counterexamples read like Hack source code,
   similar to the custom visualizer in the Alloy model (hack.als line 2:
   `//@custom_visualization: ./show ./example.php`)
-
-  Example usage:
-  ```
-  abstract class "C1" with
-    «__ConsistentConstruct»
-  where
-    abstract static function "abs" : void
-    «__ConcreteClass» static function "nc" : void
-
-  abstract final class "C2" extends "C1" where
-    static function "abs" : void
-  ```
 -/
 import HackSafety.Safety
 
 -- ============================================================
--- Pretty-printed Hack declarations using custom syntax
+-- Hack-like notation for declaring methods, classes, and calls
 -- ============================================================
 
-/-- A named method for display -/
-structure NamedMethod where
-  name : String
-  method : Method
-  deriving DecidableEq
+namespace Hack
 
-/-- A named class for display -/
-structure NamedClass where
-  name : String
-  cls : Class
-  deriving DecidableEq
+-- ---- Method declarations ----
+-- Method names are for readability only (not stored in the Method struct).
 
-/-- A named call for display -/
-structure NamedCall where
-  description : String
-  call : Call
+/-- `abstract static function "foo" : void` -/
+abbrev «abstract static function» (_name : String := "") : Method :=
+  { kind := MethodKind.abstract_, hasConcreteClassAttr := false, isFinal := false }
 
--- ============================================================
--- Method builders with Hack-like names
--- ============================================================
+/-- `public static function "foo" : void { ... }` -/
+abbrev «public static function» (_name : String := "") : Method :=
+  { kind := MethodKind.concrete, hasConcreteClassAttr := false, isFinal := false }
 
-/-- `abstract static function "name" : void` -/
-def «abstract static function» (name : String) : NamedMethod :=
-  ⟨name, { kind := MethodKind.abstract_, hasConcreteClassAttr := false, isFinal := false }⟩
+/-- `<<__ConcreteClass>> public static function "foo" : void { ... }` -/
+abbrev «<<__ConcreteClass>> public static function» (_name : String := "") : Method :=
+  { kind := MethodKind.concrete, hasConcreteClassAttr := true, isFinal := false }
 
-/-- `static function "name" : void` (concrete) -/
-def «static function» (name : String) : NamedMethod :=
-  ⟨name, { kind := MethodKind.concrete, hasConcreteClassAttr := false, isFinal := false }⟩
+/-- `public function __construct() { }` (concrete constructor) -/
+abbrev «public function __construct» : Method :=
+  { kind := MethodKind.concrete, hasConcreteClassAttr := true, isFinal := false }
 
-/-- `«__ConcreteClass» static function "name" : void` -/
-def «concreteClass static function» (name : String) : NamedMethod :=
-  ⟨name, { kind := MethodKind.concrete, hasConcreteClassAttr := true, isFinal := false }⟩
+/-- Implicit abstract constructor (for abstract classes without explicit constructor) -/
+abbrev «(no concrete __construct)» : Method :=
+  { kind := MethodKind.abstract_, hasConcreteClassAttr := true, isFinal := false }
 
-/-- Abstract constructor (for abstract classes) -/
-def «abstract __construct» : NamedMethod :=
-  ⟨"__construct", { kind := MethodKind.abstract_, hasConcreteClassAttr := true, isFinal := false }⟩
+-- ---- Class declarations ----
 
-/-- Concrete constructor (for concrete classes) -/
-def «__construct» : NamedMethod :=
-  ⟨"__construct", { kind := MethodKind.concrete, hasConcreteClassAttr := true, isFinal := false }⟩
+/-- `abstract class Name { ... }` -/
+abbrev «abstract class» (_name : String) (methods : List Method) : Class :=
+  { kind := ClassKind.abstract_, isClassFinal := false,
+    hasConsistentConstruct := false, methods }
 
--- ============================================================
--- Class builders with Hack-like syntax
--- ============================================================
+/-- `<<__ConsistentConstruct>> abstract class Name { ... }` -/
+abbrev «<<__ConsistentConstruct>> abstract class» (_name : String) (methods : List Method) : Class :=
+  { kind := ClassKind.abstract_, isClassFinal := false,
+    hasConsistentConstruct := true, methods }
 
-/-- `abstract class "Name" where ...methods...` -/
-def «abstract class» (name : String) (methods : List NamedMethod) : NamedClass :=
-  ⟨name, {
-    kind := ClassKind.abstract_,
-    isClassFinal := false,
-    hasConsistentConstruct := false,
-    methods := methods.map (·.method)
-  }⟩
+/-- `abstract final class Name { ... }` -/
+abbrev «abstract final class» (_name : String) (methods : List Method) : Class :=
+  { kind := ClassKind.abstract_, isClassFinal := true,
+    hasConsistentConstruct := false, methods }
 
-/-- `«__ConsistentConstruct» abstract class "Name" where ...` -/
-def «cc abstract class» (name : String) (methods : List NamedMethod) : NamedClass :=
-  ⟨name, {
-    kind := ClassKind.abstract_,
-    isClassFinal := false,
-    hasConsistentConstruct := true,
-    methods := methods.map (·.method)
-  }⟩
+/-- `<<__ConsistentConstruct>> abstract final class Name extends ... { ... }` -/
+abbrev «<<__ConsistentConstruct>> abstract final class» (_name : String)
+    (methods : List Method) : Class :=
+  { kind := ClassKind.abstract_, isClassFinal := true,
+    hasConsistentConstruct := true, methods }
 
-/-- `abstract final class "Name" where ...` -/
-def «abstract final class» (name : String) (methods : List NamedMethod) : NamedClass :=
-  ⟨name, {
-    kind := ClassKind.abstract_,
-    isClassFinal := true,
-    hasConsistentConstruct := false,
-    methods := methods.map (·.method)
-  }⟩
+/-- `class Name { ... }` (concrete class) -/
+abbrev «class» (_name : String) (methods : List Method) : Class :=
+  { kind := ClassKind.concrete, isClassFinal := false,
+    hasConsistentConstruct := false, methods }
 
-/-- `«__ConsistentConstruct» abstract final class "Name" where ...`
-    (inherits CC from parent) -/
-def «cc abstract final class» (name : String) (methods : List NamedMethod) : NamedClass :=
-  ⟨name, {
-    kind := ClassKind.abstract_,
-    isClassFinal := true,
-    hasConsistentConstruct := true,
-    methods := methods.map (·.method)
-  }⟩
+-- ---- Call expressions ----
 
-/-- `class "Name" where ...` (concrete) -/
-def «class» (name : String) (methods : List NamedMethod) : NamedClass :=
-  ⟨name, {
-    kind := ClassKind.concrete,
-    isClassFinal := false,
-    hasConsistentConstruct := false,
-    methods := methods.map (·.method)
-  }⟩
-
--- ============================================================
--- Call builders with Hack-like syntax
--- ============================================================
-
-/-- `$var::method()` where `$var: classname<C>` -/
-def «classname call» (desc : String) (cls : NamedClass) (resolved : NamedMethod)
-    (staticResolved : NamedMethod) : NamedCall :=
-  ⟨desc, Call.varCall {
+/-- `$var::method()` where `$var : classname<C>` -/
+abbrev «classname<_>::call» (cls : Class) (resolved staticResolved : Method) : Call :=
+  Call.varCall {
     receiverTypeKind := TypeKind.className,
-    pointsToClass := cls.cls,
-    resolvesTo := resolved.method,
-    staticResolvesTo := staticResolved.method
-  }⟩
+    pointsToClass := cls,
+    resolvesTo := resolved,
+    staticResolvesTo := staticResolved }
 
-/-- `$var::method()` where `$var: concrete_classname<C>` -/
-def «concrete_classname call» (desc : String) (cls : NamedClass) (resolved : NamedMethod)
-    (staticResolved : NamedMethod) : NamedCall :=
-  ⟨desc, Call.varCall {
+/-- `$var::method()` where `$var : concrete_classname<C>` -/
+abbrev «concrete_classname<_>::call» (cls : Class) (resolved staticResolved : Method) : Call :=
+  Call.varCall {
     receiverTypeKind := TypeKind.concreteClassName,
-    pointsToClass := cls.cls,
-    resolvesTo := resolved.method,
-    staticResolvesTo := staticResolved.method
-  }⟩
+    pointsToClass := cls,
+    resolvesTo := resolved,
+    staticResolvesTo := staticResolved }
 
-/-- `static::method()` inside a method of a class -/
-def «static:: call» (desc : String) (resolvedClass : NamedClass) (resolved : NamedMethod)
-    (staticResolved : NamedMethod) (containingMethod : NamedMethod)
-    (containingClass : NamedClass) : NamedCall :=
-  ⟨desc, Call.staticCall {
-    resolvesToClass := resolvedClass.cls,
-    resolvesTo := resolved.method,
-    staticResolvesTo := staticResolved.method,
-    containingMethod := containingMethod.method,
-    containingClass := containingClass.cls
-  }⟩
+/-- `static::method()` inside containingMethod of containingClass -/
+abbrev «static::call» (resolvesToClass : Class) (resolved staticResolved : Method)
+    (containingMethod : Method) (containingClass : Class) : Call :=
+  Call.staticCall {
+    resolvesToClass,
+    resolvesTo := resolved,
+    staticResolvesTo := staticResolved,
+    containingMethod,
+    containingClass }
+
+end Hack
 
 -- ============================================================
--- Counterexample 1 (revisited with Hack notation):
--- Removing TCCantCallAbstractMethodThroughClassName
+-- Counterexample 1: Removing TCCantCallAbstractMethodThroughClassName
+-- (hack.als line 258-266)
 --
 -- <?hh
 -- abstract class C {
 --   abstract static function foo(): void;
 -- }
 -- $cls = C::class;            // $cls: classname<C>
--- $cls::foo();                 // RUNTIME ERROR
+-- $cls::foo();                 // RUNTIME ERROR: calls abstract method
 -- ============================================================
 
-namespace Example1
+namespace Counterexample.AbstractThroughClassname
+open Hack
 
-def C := «abstract class» "C" [
-  «abstract static function» "foo"
-]
+private def C :=
+  «abstract class» "C" [
+    «abstract static function» "foo"
+  ]
 
-def foo := «abstract static function» "foo"
+private def foo := «abstract static function» "foo"
 
-def the_call := «classname call» "$cls::foo()" C foo foo
+private def the_call := «classname<_>::call» C foo foo
 
-theorem fatal : the_call.call.isFatal := rfl
+/-- Without TCCantCallAbstractMethodThroughClassName, calling an abstract
+    method through classname<C> causes a runtime fatal. -/
+theorem fatal : the_call.isFatal := rfl
 
-end Example1
+end Counterexample.AbstractThroughClassname
 
 -- ============================================================
--- Counterexample 2 (revisited with Hack notation):
--- Removing TCAbstractFinalCantInheritConsistentConstruct
+-- Counterexample 2: Removing TCAbstractFinalCantInheritConsistentConstruct
+-- (hack.als line 296-303)
 --
 -- <?hh
 -- <<__ConsistentConstruct>>
@@ -191,45 +139,53 @@ end Example1
 -- // C2 inherits __ConsistentConstruct from C1
 -- abstract final class C2 extends C1 {
 --   public static function abs(): void {}
+--   // C2 has NO concrete constructor (it's abstract)
 -- }
 --
 -- $cls = C2::class;           // $cls: concrete_classname<C2>
--- $cls::__construct();        // RUNTIME ERROR: abstract constructor
+-- $cls::__construct();         // RUNTIME ERROR: abstract constructor
 -- ============================================================
 
-namespace Example2
+namespace Counterexample.AbstractFinalConsistentConstruct
+open Hack
 
-def C1 := «cc abstract class» "C1" [
-  «abstract static function» "abs",
-  «concreteClass static function» "nc",
-  «abstract __construct»
-]
+private def C1 :=
+  «<<__ConsistentConstruct>> abstract class» "C1" [
+    «abstract static function» "abs",
+    «<<__ConcreteClass>> public static function» "nc",
+    «(no concrete __construct)»
+  ]
 
-def C2 := «cc abstract final class» "C2" [
-  «static function» "abs",
-  «abstract __construct»
-]
+private def C2 :=
+  «<<__ConsistentConstruct>> abstract final class» "C2" [
+    «public static function» "abs",
+    «(no concrete __construct)»
+  ]
 
-def the_call := «concrete_classname call» "$cls::__construct()"
-  C2 «abstract __construct» «abstract __construct»
+private def the_call :=
+  «concrete_classname<_>::call» C2 «(no concrete __construct)» «(no concrete __construct)»
 
-theorem fatal : the_call.call.isFatal := rfl
+/-- Without TCAbstractFinalCantInheritConsistentConstruct, calling __construct
+    on an abstract final CC class through concrete_classname causes a runtime fatal. -/
+theorem fatal : the_call.isFatal := rfl
 
+/-- The rule TCAbstractFinalCantInheritConsistentConstruct catches C2:
+    it is abstract, final, and has __ConsistentConstruct. -/
 theorem caught_by_rule :
-    C2.cls.kind = ClassKind.abstract_ ∧
-    C2.cls.isClassFinal ∧
-    C2.cls.hasConsistentConstruct := ⟨rfl, rfl, rfl⟩
+    C2.kind = ClassKind.abstract_ ∧
+    C2.isClassFinal ∧
+    C2.hasConsistentConstruct := ⟨rfl, rfl, rfl⟩
 
-end Example2
+end Counterexample.AbstractFinalConsistentConstruct
 
 -- ============================================================
--- Counterexample 3 (revisited with Hack notation):
--- Removing TCCanOnlyUseStaticAsConcreteInConcreteClassMethods
+-- Counterexample 3: Removing TCCanOnlyUseStaticAsConcreteInConcreteClassMethods
+-- (hack.als line 284-294)
 --
 -- <?hh
 -- abstract class Parent {
 --   abstract static function abs(): void;
---   // NOT <<__ConcreteClass>> - this is the bug
+--   // NOT <<__ConcreteClass>> — this is the bug
 --   public static function caller(): void {
 --     static::abs();          // RUNTIME ERROR when static = Parent
 --   }
@@ -237,23 +193,72 @@ end Example2
 --
 -- $cls = Parent::class;       // $cls: classname<Parent>
 -- $cls::caller();
+-- // Inside caller(), static:: resolves to Parent (abstract).
+-- // static::abs() hits the abstract method → fatal.
 -- ============================================================
 
-namespace Example3
+namespace Counterexample.StaticInNonConcreteClassMethod
+open Hack
 
-def abs := «abstract static function» "abs"
-def caller := «static function» "caller"  -- NOT ConcreteClass
+private def abs := «abstract static function» "abs"
+private def caller := «public static function» "caller"  -- NOT <<__ConcreteClass>>
 
-def Parent := «abstract class» "Parent" [abs, caller]
+private def Parent :=
+  «abstract class» "Parent" [abs, caller]
 
-def the_call := «static:: call» "static::abs() inside caller()"
-  Parent abs abs caller Parent
+private def the_call :=
+  «static::call» Parent abs abs caller Parent
 
-theorem fatal : the_call.call.isFatal := rfl
+/-- Without TCCanOnlyUseStaticAsConcreteInConcreteClassMethods, calling
+    static::abs() from a non-ConcreteClass method causes a runtime fatal. -/
+theorem fatal : the_call.isFatal := rfl
 
+/-- The rule would catch this: abs is abstract but caller is NOT
+    effectively ConcreteClass. -/
 theorem caller_not_concrete_class :
-    ¬ caller.method.effectivelyConcreteClass Parent.cls := by
-  simp [caller, «static function», Parent, «abstract class»,
+    ¬ caller.effectivelyConcreteClass Parent := by
+  simp [caller, «public static function», Parent, «abstract class»,
         Method.effectivelyConcreteClass]
 
-end Example3
+end Counterexample.StaticInNonConcreteClassMethod
+
+-- ============================================================
+-- Counterexample 4: Removing the concrete_no_abstract structural rule
+-- (hack.als line 115-117)
+--
+-- <?hh
+-- // Hypothetical — illegal in Hack:
+-- class C {
+--   abstract static function foo(): void;  // can't have abstract in concrete class
+-- }
+-- $cls = C::class;            // $cls: concrete_classname<C>
+-- $cls::foo();                 // RUNTIME ERROR
+-- ============================================================
+
+namespace Counterexample.ConcreteClassWithAbstract
+open Hack
+
+private def C :=
+  «class» "C" [
+    «abstract static function» "foo"   -- illegal: abstract method in concrete class
+  ]
+
+private def the_call :=
+  «concrete_classname<_>::call» C («abstract static function» "foo") («abstract static function» "foo")
+
+/-- Without concrete_no_abstract, a concrete class with an abstract method
+    causes a runtime fatal when called. -/
+theorem fatal : the_call.isFatal := rfl
+
+end Counterexample.ConcreteClassWithAbstract
+
+-- ============================================================
+-- Summary
+-- ============================================================
+
+theorem all_counterexamples_are_fatal :
+    Counterexample.AbstractThroughClassname.the_call.isFatal ∧
+    Counterexample.AbstractFinalConsistentConstruct.the_call.isFatal ∧
+    Counterexample.StaticInNonConcreteClassMethod.the_call.isFatal ∧
+    Counterexample.ConcreteClassWithAbstract.the_call.isFatal :=
+  ⟨rfl, rfl, rfl, rfl⟩
