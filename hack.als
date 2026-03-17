@@ -8,6 +8,8 @@ one sig __Construct in MethodName {}
 
 one sig Final {} // marker for final methods
 one sig Private {} // marker for private methods
+one sig ClassFinal {} // marker for final classes
+one sig ConsistentConstructAttr {} // marker for __ConsistentConstruct class attribute
 
 abstract sig Method {
   method_name: one MethodName,
@@ -21,7 +23,9 @@ abstract sig Method {
 // - "overriding" is when subclass has a meth with the same name as the name of a meth in the parent
 abstract sig Class {
    methods: set Method,
-   parent: lone Class
+   parent: lone Class,
+   is_class_final: lone ClassFinal,
+   consistent_construct: lone ConsistentConstructAttr
 }
 
 sig AbstractClass, ConcreteClass extends Class {}
@@ -83,6 +87,15 @@ one sig ConcreteClassAttribute {}
 
 fact "no class is its own ancestor" {
    no c: Class | c in c.^parent
+}
+
+fact "__ConsistentConstruct propagates through extends" {
+  all c: Class | ConsistentConstructAttr in c.parent.consistent_construct implies
+    ConsistentConstructAttr in c.consistent_construct
+}
+
+fact "final classes cannot be extended" {
+  all c: Class | ClassFinal in c.is_class_final implies no c.~parent
 }
 
 fact "all methods are in classes, all `MethodName`s name a method" {
@@ -236,7 +249,7 @@ fact "typing: can't call <<__ConcreteClass>> methods through ClassName" {
   {call: Call |  {
       call.receiver in Var
       call.receiver.var_ty in ClassName
-      call.static_resolve.has_concrete_class_attr
+      call.static_resolve.effectively_concrete_class  // use new predicate
     }
   }
 }
@@ -255,8 +268,8 @@ fact typing_concrete_class_overriding {
   TCCantOverrideNonConcreteClassMethodWithConcreteClassMethod.tc_error_at =
   { m: Method | some overridden: m.~methods.parent.methods |
     { m.method_name = overridden.method_name
-      m.has_concrete_class_attr
-      not overridden.has_concrete_class_attr
+      m.effectively_concrete_class  // use new predicate
+      not overridden.effectively_concrete_class  // use new predicate
     }
 
   }
@@ -269,12 +282,15 @@ fact "typing: Constructors implicitly have the <<__ConcreteClass>> attribute" {
 
 fact "typing: can only call <<__ConcreteClass>> and abstract methods through StaticKeyword in a <<__ConcreteClass>> method" {
   TCCanOnlyUseStaticAsConcreteInConcreteClassMethods.tc_error_at = {
-    call: Call | 
+    call: Call |
     let called_method = static_resolve[call] |
     {
       call.receiver = StaticKeyword
-      (called_method.has_concrete_class_attr or called_method in AbstractMethod)
-      not call.containing_method.has_concrete_class_attr
+      (called_method.effectively_concrete_class or called_method in AbstractMethod)  // use new predicate
+      not call.containing_method.effectively_concrete_class  // use new predicate
+      // __ConsistentConstruct allows calling new static() (= static::__Construct())
+      not (called_method.method_name = __Construct
+           and ConsistentConstructAttr in call.containing_method.containing_class.consistent_construct)
     }
   }
 }
@@ -307,6 +323,13 @@ fact "C has type ConcreteClassName<C> when C is a concrete class" {
 
 pred has_concrete_class_attr[m: Method] {
   ConcreteClassAttribute in m.concrete_class_attribute
+}
+
+// NEW: A method is "effectively ConcreteClass" if it has the attribute
+// OR if it's final in a concrete class
+pred effectively_concrete_class[m: Method] {
+  has_concrete_class_attr[m]
+  or (Final in m.is_final and m.containing_class in ConcreteClass)
 }
 
 fun resolve_var: Var -> Class {
@@ -547,7 +570,7 @@ run { demo_tc_error[
 
 assert static_always_resolves_to_a_concrete_class_in_concrete_class_methods {
    all m: Method |
-   m.has_concrete_class_attr implies
+   m.effectively_concrete_class implies  // use new predicate
       (resolve_static_keyword[m] in ConcreteClass
    or some TypeCheckerError.tc_error_at)
 
