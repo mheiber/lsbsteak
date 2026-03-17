@@ -107,8 +107,11 @@ end Hack
 -- abstract class C {
 --   abstract static function foo(): void;
 -- }
--- $cls = C::class;            // $cls: classname<C>
--- $cls::foo();                 // RUNTIME ERROR: calls abstract method
+-- <<__EntryPoint>>
+-- function main(): void {
+--   $cls = C::class;            // $cls: classname<C>
+--   $cls::foo();                 // RUNTIME ERROR: calls abstract method
+-- }
 -- ============================================================
 
 namespace Counterexample.AbstractThroughClassname
@@ -147,9 +150,12 @@ end Counterexample.AbstractThroughClassname
 --   // C2 has NO concrete constructor (it's abstract)
 -- }
 --
--- $cls = C2::class;           // $cls: concrete_classname<C2>
--- new $cls();                  // RUNTIME ERROR: abstract constructor
--- // (modeled as $cls::__construct() in the Alloy/Lean model)
+-- <<__EntryPoint>>
+-- function main(): void {
+--   $cls = C2::class;           // $cls: concrete_classname<C2>
+--   new $cls();                  // RUNTIME ERROR: abstract constructor
+--   // (modeled as $cls::__construct() in the Alloy/Lean model)
+-- }
 -- ============================================================
 
 namespace Counterexample.AbstractFinalConsistentConstruct
@@ -197,10 +203,13 @@ end Counterexample.AbstractFinalConsistentConstruct
 --   }
 -- }
 --
--- $cls = Parent::class;       // $cls: classname<Parent>
--- $cls::caller();
--- // Inside caller(), static:: resolves to Parent (abstract).
--- // static::abs() hits the abstract method → fatal.
+-- <<__EntryPoint>>
+-- function main(): void {
+--   $cls = Parent::class;       // $cls: classname<Parent>
+--   $cls::caller();
+--   // Inside caller(), static:: resolves to Parent (abstract).
+--   // static::abs() hits the abstract method → fatal.
+-- }
 -- ============================================================
 
 namespace Counterexample.StaticInNonConcreteClassMethod
@@ -237,8 +246,11 @@ end Counterexample.StaticInNonConcreteClassMethod
 -- class C {
 --   abstract static function foo(): void;  // can't have abstract in concrete class
 -- }
--- $cls = C::class;            // $cls: concrete_classname<C>
--- $cls::foo();                 // RUNTIME ERROR
+-- <<__EntryPoint>>
+-- function main(): void {
+--   $cls = C::class;            // $cls: concrete_classname<C>
+--   $cls::foo();                 // RUNTIME ERROR
+-- }
 -- ============================================================
 
 namespace Counterexample.ConcreteClassWithAbstract
